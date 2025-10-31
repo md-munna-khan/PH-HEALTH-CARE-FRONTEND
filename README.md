@@ -13,3 +13,6 @@ Those who will face setup issue for them, this is the setup branch: https://gith
 ## 65-2 setting up the backend server
 
 - Just run the backend and then run the frontend 
+## 65-3 setting up the Frontend with Nextj 16
+- atomic design pattern
+![alt text](image-1.png)
