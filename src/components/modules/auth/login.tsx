@@ -26,7 +26,9 @@ import {
     FormLabel,
     FormMessage,
 } from "@/components/ui/form";
-import { log } from "console";
+import loginUser from "@/utility/login";
+import { useRouter } from "next/navigation";
+
 ;
 
 
@@ -45,7 +47,7 @@ export default function Login() {
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-
+const router =useRouter();
     const form = useForm<LoginFormData>({
         resolver: zodResolver(loginSchema),
         defaultValues: {
@@ -59,9 +61,15 @@ export default function Login() {
         setIsLoading(true);
         setError(null);
 try {
-    const res=await logInUser(data.email,data.password);                    
-} catch (error) {
-    setError
+    const res=await loginUser(data.email,data.password);   
+    console.log('Login component theke:', res); 
+    if (res.success) {
+        router.push('/dashboard');
+    } else {
+        setError(res.message || 'Login failed. Please try again.');
+    }                
+} catch (err:any) {
+    setError('Login failed. Please try again.');
 }finally{
     setIsLoading(false);
 }
