@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/form";
 import loginUser from "@/utility/login";
 import { useRouter } from "next/navigation";
+import checkAuthStatus from "@/utility/auth";
 
 ;
 
@@ -62,9 +63,9 @@ const router =useRouter();
         setError(null);
 try {
     const res=await loginUser(data.email,data.password);   
-    console.log('Login component theke:', res); 
+  
     if (res.success) {
-        router.push('/dashboard');
+    const authStatus= await checkAuthStatus();
     } else {
         setError(res.message || 'Login failed. Please try again.');
     }                
