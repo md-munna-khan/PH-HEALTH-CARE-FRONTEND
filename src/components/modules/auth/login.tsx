@@ -26,7 +26,11 @@ import {
     FormLabel,
     FormMessage,
 } from "@/components/ui/form";
-import { log } from "console";
+import loginUser from "@/utility/login";
+import { useRouter } from "next/navigation";
+import checkAuthStatus from "@/utility/auth";
+
+
 ;
 
 
@@ -45,7 +49,7 @@ export default function Login() {
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-
+const router =useRouter();
     const form = useForm<LoginFormData>({
         resolver: zodResolver(loginSchema),
         defaultValues: {
@@ -59,9 +63,32 @@ export default function Login() {
         setIsLoading(true);
         setError(null);
 try {
-    const res=await logInUser(data.email,data.password);                    
-} catch (error) {
-    setError
+    const res=await loginUser(data.email,data.password);   
+  
+    if (res.success) {
+    const authStatus= await checkAuthStatus();
+
+    if(authStatus.isAuthenticated && authStatus.user){
+const {role}=authStatus.user;
+    switch(role){
+        case 'ADMIN':
+            router.push('/dashboard');
+            break;
+        case 'DOCTOR':
+            router.push('/dashboard/doctor');
+            break;
+        case 'PATIENT':
+            router.push('/dashboard/patient');
+            break;
+        default:
+            router.push('/');
+    }
+
+} else {
+        setError(res.message || 'Login failed. Please try again.');
+    }  }              
+} catch (err:any) {
+    setError('Login failed. Please try again.');
 }finally{
     setIsLoading(false);
 }
@@ -77,7 +104,7 @@ try {
                     </span>
                 </Link>
             </div>
-
+             
             <Card className="w-full max-w-md">
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)}>
