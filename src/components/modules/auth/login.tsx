@@ -30,6 +30,7 @@ import loginUser from "@/utility/login";
 import { useRouter } from "next/navigation";
 import checkAuthStatus from "@/utility/auth";
 
+
 ;
 
 
@@ -66,9 +67,26 @@ try {
   
     if (res.success) {
     const authStatus= await checkAuthStatus();
-    } else {
+
+    if(authStatus.isAuthenticated && authStatus.user){
+const {role}=authStatus.user;
+    switch(role){
+        case 'ADMIN':
+            router.push('/dashboard');
+            break;
+        case 'DOCTOR':
+            router.push('/dashboard/doctor');
+            break;
+        case 'PATIENT':
+            router.push('/dashboard/patient');
+            break;
+        default:
+            router.push('/');
+    }
+
+} else {
         setError(res.message || 'Login failed. Please try again.');
-    }                
+    }  }              
 } catch (err:any) {
     setError('Login failed. Please try again.');
 }finally{
@@ -86,7 +104,7 @@ try {
                     </span>
                 </Link>
             </div>
-
+             
             <Card className="w-full max-w-md">
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)}>

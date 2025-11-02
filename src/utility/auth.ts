@@ -1,4 +1,4 @@
-import { is } from "zod/locales";
+
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
  const checkAuthStatus=async()=>{
@@ -17,7 +17,7 @@ import { is } from "zod/locales";
       }
       return{
         isAuthenticated:true,
-        user:data.user
+        user:data.data
       }
       
      } catch (err:any) {
