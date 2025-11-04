@@ -81,9 +81,9 @@ if(role==='ADMIN'){
 
 const data = {
   user: {
-    name: user.name,
-    email: user.email,
-    avatar: user.avatarUrl,
+    // name: user.name,
+    // email: user.email,
+    // avatar: user.avatarUrl,
   },
   navMain:navMainItems ,
 
