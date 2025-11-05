@@ -1,17 +1,10 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtDecode } from "jwt-decode";
+import { userInterface } from "./types/userTypes";
 
 
- 
-interface userInterface {
-    id: string;
-    email: string;
-    // Role determines which protected routes the user may access
-    role: "ADMIN" | "DOCTOR" | "PATIENT";
-    iat: number; // issued-at timestamp
-    exp: number; // expiry timestamp
-}
+
 const roleBasedRoutes = {
   ADMIN: ["/admin/dashboard",],
   DOCTOR: ["/doctor/dashboard"],
@@ -106,5 +99,5 @@ export async function proxy(request: NextRequest) {
 }
 // See "Matching Paths" below to learn more
 export const config = {
-  matcher: ["/dashboard/:path*", "/login", "/register", "/forgot-password"],
+  matcher: ["/admin/dashboard/:path*", "/login", "/register", "/forgot-password"],
 };
