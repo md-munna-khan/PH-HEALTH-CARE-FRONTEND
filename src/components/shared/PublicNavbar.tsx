@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 import { UseUser } from "@/providers/userProviders";
+import { logOutUser } from "@/utility/logOut";
 
 
 
@@ -48,7 +49,9 @@ const role= user?.role || 'guest';
 
         <div className="hidden md:flex items-center space-x-2">
           {role !== 'guest' ? (
-            <Button variant="destructive">Logout</Button>
+            <Button variant="destructive" onClick={()=>{
+                      logOutUser()
+                    }}>Logout</Button>
           ) : (
             <Link href="/login" className="text-lg font-medium">
               <Button>Login</Button>
@@ -81,7 +84,9 @@ const role= user?.role || 'guest';
                 <div className="border-t pt-4 flex flex-col space-y-4">
                   <div className="flex justify-center"></div>
                   {role!== 'guest' ? (
-                    <Button variant="destructive">Logout</Button>
+                    <Button variant="destructive" onClick={()=>{
+                      logOutUser()
+                    }}>Logout</Button>
                   ) : (
                     <Link href="/login" className="text-lg font-medium">
                       <Button>Login</Button>
