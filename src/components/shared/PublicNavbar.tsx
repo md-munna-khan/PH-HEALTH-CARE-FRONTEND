@@ -6,13 +6,15 @@ import { Menu } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import checkAuthStatus from "@/utility/auth";
+
+import { UseUser } from "@/providers/userProviders";
 
 
-const {user} = await checkAuthStatus();
+
 const PublicNavbar = () => {
   
-  const {role} = user || {role: 'guest'};
+const {user}= UseUser();
+const role= user?.role || 'guest';
   
   const navItems = [
     { href: "#", label: "Consultation" },
@@ -23,7 +25,7 @@ const PublicNavbar = () => {
   ];
 
   if(role === 'ADMIN'){
-    navItems.push({ href: "/dashboard", label: "Admin Dashboard" });
+    navItems.push({ href: "/admin/dashboard", label: "Admin Dashboard" });
   }
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur  dark:bg-background/95">
