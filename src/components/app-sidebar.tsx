@@ -2,20 +2,13 @@
 
 import * as React from "react"
 import {
-
-
   IconDashboard,
-
-
   IconHelp,
   IconInnerShadowTop,
-
-
   IconSearch,
   IconSettings,
-  IconUsers,
-} from "@tabler/icons-react"
 
+} from "@tabler/icons-react"
 
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
@@ -29,17 +22,15 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-
-import checkAuthStatus from "@/utility/auth"
 import Link from "next/link"
 
-const {user} = await checkAuthStatus();
-console.log(user)
-const {role}=user || {role:'GUEST'};
-console.log(role)
 
-const navMainItems =
- [
+
+
+
+
+
+const navMainItems = [
     {
       title: "Dashboard",
       url: "#",
@@ -56,37 +47,22 @@ const navMainItems =
     //   icon: IconChartBar,
     // },
     // {
-    //   title: "Projects",
-    //   url: "#",
-    //   icon: IconFolder,
-    // },
-    // {
     //   title: "Add Doctor",
     //   url: "/dashboard/add-doctor",
     //   icon: IconUsers,
     // },
-  ];
+  ]
 
-if(role==='ADMIN'){
-  navMainItems.push(  {
-    title: "Manage Doctors",
-    url: "/dashboard/admin/manage-doctors",
-    icon: IconUsers,
-  },{
-    title: "Manage Patients",
-    url: "/dashboard/admin/manage-patients",
-    icon: IconUsers,
-  })
-}
+  
+  
 
 const data = {
   user: {
-    name: user.name,
-    email: user.email,
-    avatar: user.avatarUrl,
+    name: '',
+    email: '',
+    avatar: '',
   },
-  navMain:navMainItems ,
-
+  navMain: navMainItems,
   navSecondary: [
     {
       title: "Settings",
@@ -104,10 +80,13 @@ const data = {
       icon: IconSearch,
     },
   ],
-  
+ 
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+
+ 
+
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -119,7 +98,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             >
               <Link href="/">
                 <IconInnerShadowTop className="!size-5" />
-                <span className="text-base font-semibold">Ph health care</span>
+                <span className="text-base font-semibold">PH Health Care</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -127,7 +106,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
-       
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
