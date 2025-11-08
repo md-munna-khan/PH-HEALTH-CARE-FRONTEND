@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-
 import { useActionState } from "react";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "./ui/field";
 import { Input } from "./ui/input";
@@ -9,9 +8,18 @@ import { loginUser } from "@/services/auth/loginUser";
 import { Button } from "./ui/button";
 
 const LoginForm = () => {
- const [state, formAction, isPending] = useActionState(loginUser, null);
-  console.log(state)
- return (
+  const [state, formAction, isPending] = useActionState(loginUser, null);
+
+   const getFieldError = (fieldName: string) => {
+    if (state?.error) {
+      const fieldError = state.error.find(
+        (err: { field: string }) => err.field === fieldName
+      );
+      return fieldError ? fieldError.message : null;
+    }
+  };
+
+  return (
     <form action={formAction}>
       <FieldGroup>
         <div className="grid grid-cols-1 gap-4">
@@ -23,10 +31,13 @@ const LoginForm = () => {
               name="email"
               type="email"
               placeholder="m@example.com"
-              //   required
+              // required
             />
-
-           
+            {getFieldError("email") && (
+              <FieldDescription className="text-red-600">
+                {getFieldError("email")}
+              </FieldDescription>
+            )}
           </Field>
 
           {/* Password */}
@@ -37,9 +48,13 @@ const LoginForm = () => {
               name="password"
               type="password"
               placeholder="Enter your password"
-              //   required
+              // required
             />
-          
+            {getFieldError("password") && (
+              <FieldDescription className="text-red-600">
+                {getFieldError("password")}
+              </FieldDescription>
+            )}
           </Field>
         </div>
         <FieldGroup className="mt-4">
