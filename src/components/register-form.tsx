@@ -8,11 +8,16 @@ import { Button } from "./ui/button";
 import { registerPatient } from "@/services/auth/registerPatient";
 
 
-
 const RegisterForm = () => {
 const [state,formAction,isPending]=useActionState(registerPatient,null)
-console.log(state)
-console.log(state,isPending)
+   const getFieldError = (fieldName: string) => {
+    if (state?.error) {
+      const fieldError = state.error.find(
+        (err: { field: string }) => err.field === fieldName
+      );
+      return fieldError ? fieldError.message : null;
+    }
+  };
   return (
     <form action={formAction}>
       <FieldGroup>
@@ -21,7 +26,13 @@ console.log(state,isPending)
           <Field>
             <FieldLabel htmlFor="name">Full Name</FieldLabel>
             <Input id="name" name="name" type="text" placeholder="John Doe" />
-      
+      {
+        getFieldError("name") && (
+          <FieldDescription className="text-red-600">
+            {getFieldError("name")}
+          </FieldDescription>
+        )
+      }
           </Field>
           {/* Address */}
           <Field>
@@ -32,7 +43,11 @@ console.log(state,isPending)
               type="text"
               placeholder="123 Main St"
             />
-       
+       { getFieldError("address") && (
+          <FieldDescription className="text-red-600">
+            {getFieldError("address")}
+          </FieldDescription>
+        )}
           </Field>
           {/* Email */}
           <Field>
@@ -43,14 +58,22 @@ console.log(state,isPending)
               type="email"
               placeholder="m@example.com"
             />
-
+{ getFieldError("email") && (
+          <FieldDescription className="text-red-600">
+            {getFieldError("email")}
+          </FieldDescription>
+        )}
           </Field>
           {/* Password */}
           <Field>
             <FieldLabel htmlFor="password">Password</FieldLabel>
             <Input id="password" name="password" type="password" />
 
-          
+          { getFieldError("password") && (
+          <FieldDescription className="text-red-600">
+            {getFieldError("password")}
+          </FieldDescription>
+        )}
           </Field>
           {/* Confirm Password */}
           <Field className="md:col-span-2">
@@ -60,7 +83,11 @@ console.log(state,isPending)
               name="confirmPassword"
               type="password"
             />
-
+{ getFieldError("confirmPassword") && (
+          <FieldDescription className="text-red-600">
+            {getFieldError("confirmPassword")}
+          </FieldDescription>
+        )}
           </Field>
         </div>
         <FieldGroup className="mt-4">
