@@ -71,17 +71,17 @@ if(!refreshTokenObject){
 const cookieStore = await cookies();
 cookieStore.set("accessToken", accessTokenObject.accessToken,{
 httpOnly: true,
-maxAge: parseInt(accessTokenObject.maxAge),
+maxAge: parseInt(accessTokenObject["Max-Age"]|| 1000 *  60 * 60),
 path: accessTokenObject.path || "/",
 secure: true,
-
+sameSite:accessTokenObject["samesite"] || "none",
 })
 cookieStore.set("refreshToken", refreshTokenObject.refreshToken,{
 httpOnly: true,
-maxAge: parseInt(accessTokenObject.maxAge),
+maxAge: parseInt(accessTokenObject["Max-Age"]|| 1000 *  60 * 60 * 24 * 90),
 path: accessTokenObject.path || "/",
 secure: true,
-
+sameSite:accessTokenObject["samesite"] || "none",
 })
 
     return result;
