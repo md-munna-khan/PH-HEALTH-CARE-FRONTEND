@@ -55,7 +55,7 @@ if(!validatedFields.success){
         method: "POST",
         body: newFormData,
     }).then(res => res.json());
-console.log(res)
+// console.log(res)
     return res
 
 } catch (error) {
