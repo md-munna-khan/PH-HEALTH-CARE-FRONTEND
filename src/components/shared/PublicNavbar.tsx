@@ -1,4 +1,4 @@
-'use client';
+
 import Link from "next/link";
 
 
@@ -6,15 +6,15 @@ import { Menu } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { getCookie } from "@/services/auth/tokenHandler";
+import LogoutButton from "./LogoutButton";
 
 
 
 
-const PublicNavbar = () => {
-  
 
 
-  
+const PublicNavbar = async () => {
   const navItems = [
     { href: "#", label: "Consultation" },
     { href: "#", label: "Health Plans" },
@@ -24,6 +24,7 @@ const PublicNavbar = () => {
   ];
 
 
+  const accessToken = await getCookie("accessToken");
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur  dark:bg-background/95">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
@@ -43,12 +44,14 @@ const PublicNavbar = () => {
           ))}
         </nav>
 
-        <div className="hidden md:flex items-center space-x-2">
-       
-            <Link href="/login" className="text-lg font-medium">
+      <div className="hidden md:flex items-center space-x-2">
+          {accessToken ? (
+            <LogoutButton />
+          ) : (
+            <Link href="/login">
               <Button>Login</Button>
             </Link>
-        
+          )}
         </div>
 
         {/* Mobile Menu */}
