@@ -2,11 +2,12 @@
 "use server"
 
 import z from "zod";
+import { loginUser } from "./loginUser";
 
                 
 const registerValidationZodSchema = z.object({
     name: z.string().min(2, "Name must be at least 2 characters long"),
-    address: z.string().min(5, "Address must be at least 5 characters long"),       
+    address: z.string().min(5, "Address must be at least 5 characters long").optional(),       
     email: z.email({
         error:"Invalid email address",
     }), 
@@ -54,12 +55,19 @@ if(!validatedFields.success){
     const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/user/create-patient`, {
         method: "POST",
         body: newFormData,
-    }).then(res => res.json());
-// console.log(res)
-    return res
+    })
+    const result= await res.json();
+    if(result.success){
+        await loginUser(_currentState,formData)
+    }
+console.log(result)
+    return result
 
-} catch (error) {
-    console.log(error)
+} catch (error: any) {
+     // Re-throw NEXT_REDIRECT errors so Next.js can handle them
+        if (error?.digest?.startsWith('NEXT_REDIRECT')) {
+            throw error;
+        }
     return {error:"registration failed"}
 }
 }
