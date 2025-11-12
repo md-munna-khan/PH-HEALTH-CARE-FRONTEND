@@ -6,7 +6,7 @@ import { parse } from "cookie";
 import jwt, { JwtPayload } from "jsonwebtoken";
 
 import { redirect } from "next/navigation";
-import z from "zod";
+import z, { success } from "zod";
 import { setCookie } from "./tokenHandler";
 
 const loginValidationZodSchema = z.object({
@@ -123,6 +123,6 @@ export const loginUser = async (_currentState: any, formData: any): Promise<any>
             throw error;
         }
         console.log(error);
-        return { error: "Login failed" };
+        return { success: false, message: `${process.env.NODE_ENV === 'development' ?error.message : 'Login failed you might have provided wrong credentials'}`};
     }
 }
