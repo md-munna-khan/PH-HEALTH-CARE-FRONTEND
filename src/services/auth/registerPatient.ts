@@ -68,6 +68,6 @@ console.log(result)
         if (error?.digest?.startsWith('NEXT_REDIRECT')) {
             throw error;
         }
-    return {error:"registration failed"}
+    return { success: false, message: `${process.env.NODE_ENV === 'development' ?error.message : 'Login failed you might have provided wrong credentials'}`};
 }
 }

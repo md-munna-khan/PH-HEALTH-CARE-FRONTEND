@@ -955,3 +955,616 @@ const LoginForm = ({ redirect }: { redirect?: string }) => {
 
 export default LoginForm;
 ```
+
+## 68-5 Adding Error And Success Toasts For Register, Login And Logout
+
+- for registration the toast showing mechanism is similar to login error toast. see the code .
+- setting the search params `loggedIn = true` from the login mechanism in loginUser.ts file 
+
+```ts
+/* eslint-disable @typescript-eslint/no-explicit-any */
+"use server"
+
+import { getDefaultDashboardRoute, isValidRedirectForRole, UserRole } from "@/lib/auth-utils";
+import { parse } from "cookie";
+import jwt, { JwtPayload } from "jsonwebtoken";
+// import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import z from "zod";
+import { setCookie } from "./tokenHandler";
+
+const loginValidationZodSchema = z.object({
+    email: z.email({
+        message: "Email is required",
+    }),
+    password: z.string("Password is required").min(6, {
+        error: "Password is required and must be at least 6 characters long",
+    }).max(100, {
+        error: "Password must be at most 100 characters long",
+    }),
+});
+
+export const loginUser = async (_currentState: any, formData: any): Promise<any> => {
+    try {
+        const redirectTo = formData.get('redirect') || null;
+        let accessTokenObject: null | any = null;
+        let refreshTokenObject: null | any = null;
+        const loginData = {
+            email: formData.get('email'),
+            password: formData.get('password'),
+        }
+
+        const validatedFields = loginValidationZodSchema.safeParse(loginData);
+
+        if (!validatedFields.success) {
+            return {
+                success: false,
+                errors: validatedFields.error.issues.map(issue => {
+                    return {
+                        field: issue.path[0],
+                        message: issue.message,
+                    }
+                })
+            }
+        }
+
+        const res = await fetch("http://localhost:5000/api/v1/auth/login", {
+            method: "POST",
+            body: JSON.stringify(loginData),
+            headers: {
+                "Content-Type": "application/json",
+            },
+        });
+
+        const result = await res.json()
+
+        const setCookieHeaders = res.headers.getSetCookie();
+
+        if (setCookieHeaders && setCookieHeaders.length > 0) {
+            setCookieHeaders.forEach((cookie: string) => {
+                const parsedCookie = parse(cookie);
+
+                if (parsedCookie['accessToken']) {
+                    accessTokenObject = parsedCookie;
+                }
+                if (parsedCookie['refreshToken']) {
+                    refreshTokenObject = parsedCookie;
+                }
+            })
+        } else {
+            throw new Error("No Set-Cookie header found");
+        }
+
+        if (!accessTokenObject) {
+            throw new Error("Tokens not found in cookies");
+        }
+
+        if (!refreshTokenObject) {
+            throw new Error("Tokens not found in cookies");
+        }
+
+        // const cookieStore = await cookies();
+
+        // cookieStore.set("accessToken", accessTokenObject.accessToken, {
+        //     secure: true,
+        //     httpOnly: true,
+        //     maxAge: parseInt(accessTokenObject['Max-Age']) || 1000 * 60 * 60,
+        //     path: accessTokenObject.Path || "/",
+        //     sameSite: accessTokenObject['SameSite'] || "none",
+        // });
+
+        // cookieStore.set("refreshToken", refreshTokenObject.refreshToken, {
+        //     secure: true,
+        //     httpOnly: true,
+        //     maxAge: parseInt(refreshTokenObject['Max-Age']) || 1000 * 60 * 60 * 24 * 90,
+        //     path: refreshTokenObject.Path || "/",
+        //     sameSite: refreshTokenObject['SameSite'] || "none",
+        // });
+        await setCookie("accessToken", accessTokenObject.accessToken, {
+            secure: true,
+            httpOnly: true,
+            maxAge: parseInt(accessTokenObject['Max-Age']) || 1000 * 60 * 60,
+            path: accessTokenObject.Path || "/",
+            sameSite: accessTokenObject['SameSite'] || "none",
+        });
+
+        await setCookie("refreshToken", refreshTokenObject.refreshToken, {
+            secure: true,
+            httpOnly: true,
+            maxAge: parseInt(refreshTokenObject['Max-Age']) || 1000 * 60 * 60 * 24 * 90,
+            path: refreshTokenObject.Path || "/",
+            sameSite: refreshTokenObject['SameSite'] || "none",
+        });
+        const verifiedToken: JwtPayload | string = jwt.verify(accessTokenObject.accessToken, process.env.JWT_SECRET as string);
+
+        if (typeof verifiedToken === "string") {
+            throw new Error("Invalid token");
+
+        }
+
+        const userRole: UserRole = verifiedToken.role;
+
+
+        if (!result.success) {
+            throw new Error(result.message || "Login failed");
+        }
+
+
+        if (redirectTo) {
+            const requestedPath = redirectTo.toString();
+            if (isValidRedirectForRole(requestedPath, userRole)) {
+                redirect(`${requestedPath}?loggedIn=true`);
+            } else {
+                redirect(`${getDefaultDashboardRoute(userRole)}?loggedIn=true`);
+            }
+        } else {
+            redirect(`${getDefaultDashboardRoute(userRole)}?loggedIn=true`);
+        }
+
+    } catch (error: any) {
+        // Re-throw NEXT_REDIRECT errors so Next.js can handle them this is because of when we use redirect in a try catch 
+        if (error?.digest?.startsWith('NEXT_REDIRECT')) {
+            throw error;
+        }
+        console.log(error);
+        return { success: false, message: `${process.env.NODE_ENV === 'development' ? error.message : "Login Failed. You might have entered incorrect email or password."}` };
+    }
+}
+```
+- login success toast 
+
+```tsx 
+"use client"
+
+import { useSearchParams } from "next/navigation";
+import { useEffect } from "react";
+import { toast } from "sonner";
+
+const LoginSuccessToast = () => {
+    const searchParams = useSearchParams()
+
+
+
+    useEffect(() => {
+        console.log(searchParams.get("loggedIn"))
+
+        if (searchParams.get("loggedIn") === "true") {
+            console.log("Logged in successful toast");
+            toast.success("You have been logged in successfully.");
+
+        }
+    }, [searchParams]);
+
+    return null
+};
+
+export default LoginSuccessToast;
+```
+- do not forget to wrap in the main layout so that it can be accessible globally
+
+- after showing toast remove the search param from the url. lets do it 
+
+- loginSuccessToast.tsx file 
+
+```tsx
+"use client"
+
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect } from "react";
+import { toast } from "sonner";
+
+const LoginSuccessToast = () => {
+    const searchParams = useSearchParams()
+
+    const router = useRouter()
+
+
+
+    useEffect(() => {
+        console.log(searchParams.get("loggedIn"))
+
+        if (searchParams.get("loggedIn") === "true") {
+            console.log("Logged in successful toast");
+            toast.success("You have been logged in successfully.");
+            // Remove the query parameter from the URL after showing the toast
+            const newUrl = new URL(window.location.href);
+            newUrl.searchParams.delete("loggedIn");
+            router.replace(newUrl.toString());
+
+        }
+    }, [searchParams, router]);
+
+    return null
+};
+
+export default LoginSuccessToast;
+```
+
+## 68-6 Setting Up The Dashboard Layout Structure
+
+- role based nav items will be shown from the common dashboard layout file. 
+- for extra role based things we will touch the specific layout files later .
+- src -> app -> (dashboardLayout) -> layout.tsx
+
+```tsx 
+
+import DashboardNavbar from "@/components/modules/Dashboard/DashboardNavbar";
+import DashboardSidebar from "@/components/modules/Dashboard/DashboardSidebar";
+
+const CommonDashboardLayout = async ({ children }: { children: React.ReactNode }) => {
+    return (
+        <div className="flex h-screen overflow-hidden">
+            {/* <h1>Dashboard Sidebar</h1> */}
+            <DashboardSidebar />
+            <div className="flex flex-1 flex-col overflow-hidden">
+                {/* <h1>Dashboard Navbar</h1> */}
+                <DashboardNavbar />
+                <main className="flex-1 overflow-y-auto bg-muted/10 p-4 md:p-6">
+                    <div className="max-w-7xl">{children}</div>
+                </main>
+
+            </div>
+        </div>
+    );
+};
+
+
+
+export default CommonDashboardLayout;
+```
+
+## 68-7 Making DashboardNavbar Component
+
+- type -> user.interface.ts
+
+```ts 
+import { UserRole } from "@/lib/auth-utils";
+
+export interface UserInfo {
+    name: string;
+    email: string;
+    role: UserRole;
+}                                           
+```
+
+- servicer -> auth -> getUserInfo.ts 
+
+```ts 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+"use server"
+
+import { UserInfo } from "@/types/user.interface";
+import jwt, { JwtPayload } from "jsonwebtoken";
+import { getCookie } from "./tokenHandler";
+
+
+export const getUserInfo = async (): Promise<UserInfo | null> => {
+
+    try {
+        const accessToken = await getCookie("accessToken");
+
+        if (!accessToken) {
+            return null;
+        }
+
+        const verifiedToken = jwt.verify(accessToken, process.env.JWT_SECRET as string) as JwtPayload;
+
+        if (!verifiedToken) {
+            return null;
+        }
+
+        const userInfo: UserInfo = {
+            name: verifiedToken.name || "Unknown User",
+            email: verifiedToken.email,
+            role: verifiedToken.role,
+        };
+
+        return userInfo;
+    } catch (error: any) {
+        console.log(error);
+        return null;
+    }
+
+}
+```
+
+- components -> modules -> Dashboard -> DashboardNavbarContent.tsx
+
+```tsx
+"use client"
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { UserInfo } from "@/types/user.interface";
+import { Bell, Search } from "lucide-react";
+import UserDropdown from "./UserDropDown";
+
+interface DashboardNavbarContentProps {
+    userInfo: UserInfo 
+}
+
+
+const DashboardNavbarContent = ({ userInfo }: DashboardNavbarContentProps) => {
+    return (
+        <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur">
+            <div className="flex h-16 items-center justify-between gap-4 px-4 md:px-6">
+                {/* search bar */}
+                <div className="flex-1">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input type="search" placeholder="Search...." className="pl-9" />
+                    </div>
+                </div>
+
+                {/* Right Side Actions */}
+                <div className="flex items-center gap-2">
+                    {/* Notifications */}
+                    <Button variant="outline" size="icon" className="relative">
+                        <Bell className="h-5 w-5" />
+                        <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500" />
+                    </Button>
+
+                    {/* User Dropdown */}
+                    <UserDropdown userInfo={userInfo} />
+                </div>
+            </div>
+        </header>
+    );
+};
+
+export default DashboardNavbarContent;
+```
+
+- components -> modules -> Dashboard -> DashboardNavbar.tsx
+
+```tsx
+
+import { getUserInfo } from "@/services/auth/getUserInfo";
+import { UserInfo } from "@/types/user.interface";
+import DashboardNavbarContent from "./DashboardNavbarContent";
+
+const DashboardNavbar = async () => {
+  const userInfo = (await getUserInfo()) as UserInfo;
+
+
+  return (
+    <DashboardNavbarContent
+      userInfo={userInfo}
+    />
+  );
+};
+
+export default DashboardNavbar;
+```
+
+- components -> modules -> Dashboard -> UserDropDown.tsx
+
+```tsx
+"use client";
+
+import LogoutButton from "@/components/shared/LogoutButton";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+import { UserInfo } from "@/types/user.interface";
+import { Settings, User } from "lucide-react";
+import Link from "next/link";
+
+interface UserDropdownProps {
+  userInfo: UserInfo;
+}
+
+const UserDropdown = ({ userInfo }: UserDropdownProps) => {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="icon" className="rounded-full">
+          <span className="text-sm font-semibold">
+            {userInfo.name.charAt(0).toUpperCase()}
+          </span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel>
+          <div className="flex flex-col space-y-1">
+            <p className="text-sm font-medium">{userInfo.name}</p>
+            <p className="text-xs text-muted-foreground">{userInfo.email}</p>
+            <p className="text-xs text-primary capitalize">
+              {userInfo.role.toLowerCase()}
+            </p>
+          </div>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href={"/my-profile"} className="cursor-pointer">
+            <User className="mr-2 h-4 w-4" />
+            Profile
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href={"/change-password"} className="cursor-pointer">
+            <Settings className="mr-2 h-4 w-4" />
+            Change Password
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="cursor-pointer text-red-600"
+        >
+          <LogoutButton />
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+
+export default UserDropdown;
+```
+
+## 68-8 Making DashboardSidebar Component
+
+- types -> dashboard.interface.ts 
+
+```ts 
+import { UserRole } from '@/lib/auth-utils';
+
+export interface NavItem {
+    title: string;
+    href : string;
+    icon : string;
+    badge ?: string | number;
+    description ?: string;
+    roles : UserRole[]
+}
+
+export interface NavSection {
+    title: string;
+    items: NavItem[];
+}
+```
+
+- components -> modules -> Dashboard -> DashboardSidebar.tsx
+
+```tsx
+import { getUserInfo } from "@/services/auth/getUserInfo";
+import { UserInfo } from "@/types/user.interface";
+import DashboardSidebarContent from "./DashboardSidebarContent";
+import { getDefaultDashboardRoute } from "@/lib/auth-utils";
+import { NavSection } from "@/types/dashboard.interface";
+
+const DashboardSidebar = async () => {
+    const userInfo = (await getUserInfo()) as UserInfo;
+
+    const navItems : NavSection[] = [];
+    const dashboardHome = getDefaultDashboardRoute(userInfo.role);
+    return (
+        <div>
+            <DashboardSidebarContent 
+            userInfo={userInfo}
+            navItems={navItems}
+            dashboardHome={dashboardHome}
+            />
+        </div>
+    );
+};
+
+export default DashboardSidebar;
+```
+
+- components -> modules -> Dashboard -> DashboardSidebarContent.tsx
+
+```tsx
+"use client";
+
+
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+
+import { cn } from "@/lib/utils";
+import { NavSection } from "@/types/dashboard.interface";
+import { UserInfo } from "@/types/user.interface";
+import { Bell } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+interface DashboardSidebarContentProps {
+  userInfo: UserInfo;
+  navItems: NavSection[];
+  dashboardHome: string;
+}
+
+const DashboardSidebarContent = ({
+  userInfo,
+  navItems,
+  dashboardHome,
+}: DashboardSidebarContentProps) => {
+  const pathname = usePathname();
+  return (
+    <div className="hidden md:flex h-full w-64 flex-col border-r bg-card">
+      {/* Logo/Brand */}
+      <div className="flex h-16 items-center border-b px-6">
+        <Link href={dashboardHome} className="flex items-center space-x-2">
+          <span className="text-xl font-bold text-primary">PH Healthcare</span>
+        </Link>
+      </div>
+
+      {/* Navigation */}
+      <ScrollArea className="flex-1 px-3 py-4">
+        <nav className="space-y-6">
+          {navItems.map((section, sectionIdx) => (
+            <div key={sectionIdx}>
+              {section.title && (
+                <h4 className="mb-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {section.title}
+                </h4>
+              )}
+              <div className="space-y-1">
+                {section.items.map((item) => {
+                  const isActive = pathname === item.href;
+                //   const Icon = getIconComponent(item.icon);
+                  const Icon = <Bell/>
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all",
+                        isActive
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                      )}
+                    >
+                      {/* <Icon className="h-4 w-4" /> */}
+                      <Bell className="h-4 w-4" />
+                      <span className="flex-1">{item.title}</span>
+                      {item.badge && (
+                        <Badge
+                          variant={isActive ? "secondary" : "default"}
+                          className="ml-auto"
+                        >
+                          {item.badge}
+                        </Badge>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+              {sectionIdx < navItems.length - 1 && (
+                <Separator className="my-4" />
+              )}
+            </div>
+          ))}
+        </nav>
+      </ScrollArea>
+
+      {/* User Info at Bottom */}
+      <div className="border-t p-4">
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+            <span className="text-sm font-semibold text-primary">
+              {userInfo.name.charAt(0).toUpperCase()}
+            </span>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <p className="text-sm font-medium truncate">{userInfo.name}</p>
+            <p className="text-xs text-muted-foreground capitalize">
+              {userInfo.role.toLowerCase()}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default DashboardSidebarContent;
+```
