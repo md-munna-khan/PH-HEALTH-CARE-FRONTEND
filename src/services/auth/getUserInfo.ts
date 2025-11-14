@@ -17,6 +17,7 @@ if(!verifiedToken){
 }
 
 const userInfo: userInfo = {
+    name: verifiedToken.name ,
     email: verifiedToken.email ,
     role: verifiedToken.role 
 };
