@@ -6,7 +6,7 @@ import { parse } from "cookie";
 import jwt, { JwtPayload } from "jsonwebtoken";
 
 import { redirect } from "next/navigation";
-import z, { success } from "zod";
+import z from "zod";
 import { setCookie } from "./tokenHandler";
 
 const loginValidationZodSchema = z.object({
@@ -44,7 +44,8 @@ export const loginUser = async (_currentState: any, formData: any): Promise<any>
             }
         }
 
-        const res = await fetch("http://localhost:5000/api/v1/auth/login", {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
+          
             method: "POST",
             body: JSON.stringify(loginData),
             headers: {
@@ -100,7 +101,7 @@ export const loginUser = async (_currentState: any, formData: any): Promise<any>
             throw new Error("Invalid token");
 
         }
-
+console.log(verifiedToken ,"from verified token")
         const userRole: UserRole = verifiedToken.role;
 
             if(!result.success){

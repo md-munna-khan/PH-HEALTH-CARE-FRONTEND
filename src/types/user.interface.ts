@@ -1,6 +1,7 @@
-export interface userInfo{
+import { UserRole } from "@/lib/auth-utils";
+
+export interface UserInfo {
     name: string;
     email: string;
-    role: string;
-    
+    role: UserRole;
 }

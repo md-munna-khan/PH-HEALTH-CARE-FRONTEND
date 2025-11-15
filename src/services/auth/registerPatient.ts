@@ -57,6 +57,7 @@ if(!validatedFields.success){
         body: newFormData,
     })
     const result= await res.json();
+   
     if(result.success){
         await loginUser(_currentState,formData)
     }
