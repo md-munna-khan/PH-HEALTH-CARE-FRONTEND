@@ -18,7 +18,7 @@ if(!verifiedToken){
 }
 
 const userInfo: UserInfo = {
-    name: verifiedToken.name ,
+    name: verifiedToken.name || "unknown user" ,
     email: verifiedToken.email ,
     role: verifiedToken.role 
 };
