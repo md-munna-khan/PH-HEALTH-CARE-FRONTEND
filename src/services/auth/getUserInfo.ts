@@ -1,13 +1,14 @@
 "use server";
+import { UserInfo } from "@/types/user.interface";
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { userInfo } from "@/types/user.interface";
+
 import { getCookie } from "./tokenHandler";
 import jwt, { JwtPayload } from "jsonwebtoken";
 
-export const getUserInfo = async (): Promise<userInfo | null> => {
+export const getUserInfo = async (): Promise<UserInfo | null> => {
 try {
     const accessToken =await getCookie("accessToken");
-
+console.log(accessToken,"from get user info")
     if(!accessToken){
         return null
     }
@@ -16,12 +17,12 @@ if(!verifiedToken){
     return null
 }
 
-const userInfo: userInfo = {
+const userInfo: UserInfo = {
     name: verifiedToken.name ,
     email: verifiedToken.email ,
     role: verifiedToken.role 
 };
-
+console.log(userInfo,"form check")
 return userInfo;
 } catch (error:any) {
     console.log(error)

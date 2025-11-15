@@ -4,15 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { NavSection } from "@/types/dashboard.interface";
-
+import { UserInfo } from "@/types/user.interface";
 import { Bell, Menu, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import DashboardMobileSidebar from "./DashboardMobileSidebar";
 import UserDropdown from "./UserDropdown";
-import { userInfo } from "@/types/user.interface";
 
 interface DashboardNavbarContentProps {
-  userInfo: userInfo;
+  userInfo: UserInfo;
   navItems?: NavSection[];
   dashboardHome?: string;
 }
