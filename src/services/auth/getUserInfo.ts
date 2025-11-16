@@ -8,7 +8,7 @@ import jwt, { JwtPayload } from "jsonwebtoken";
 export const getUserInfo = async (): Promise<UserInfo | null> => {
 try {
     const accessToken =await getCookie("accessToken");
-console.log(accessToken,"from get user info")
+
     if(!accessToken){
         return null
     }
@@ -18,11 +18,11 @@ if(!verifiedToken){
 }
 
 const userInfo: UserInfo = {
-    name: verifiedToken.name ,
+    name: verifiedToken.name || "unknown user" ,
     email: verifiedToken.email ,
     role: verifiedToken.role 
 };
-console.log(userInfo,"form check")
+
 return userInfo;
 } catch (error:any) {
     console.log(error)
