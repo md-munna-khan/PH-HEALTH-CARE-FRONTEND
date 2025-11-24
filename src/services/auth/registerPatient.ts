@@ -1,74 +1,66 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use server"
 
-import z from "zod";
+import { serverFetch } from "@/lib/server-fetch";
+import { zodValidator } from "@/lib/zodValidator";
+import { registerPatientValidationZodSchema } from "@/zod/auth.validation";
 import { loginUser } from "./loginUser";
 
-                
-const registerValidationZodSchema = z.object({
-    name: z.string().min(2, "Name must be at least 2 characters long"),
-    address: z.string().min(5, "Address must be at least 5 characters long").optional(),       
-    email: z.email({
-        error:"Invalid email address",
-    }), 
-    password: z.string().min(6, "Password must be at least 6 characters long"),
-confirmPassword: z.string().min(6, "Confirm Password must be at least 6 characters long"),
-}).refine((data) => data.password === data.confirmPassword, {
-   error:"password do not match",
-   path: ["confirmPassword"],
-});
 
-
-export const registerPatient = async (_currentState:any,formData:any):Promise<any> => {
-try {
-
-    const registerDataToValidate={
-        name:formData.get("name"),
-        address:formData.get("address"),
-        email:formData.get("email"),
-        password:formData.get("password"),
-        confirmPassword:formData.get("confirmPassword"),
-    }    
-const validatedFields= registerValidationZodSchema.safeParse(registerDataToValidate);
-
-if(!validatedFields.success){
-  return {error: validatedFields.error.issues.map(issue=>{
-    return{
-      field: issue.path[0],
-      message: issue.message,
-    }
-  })}
-}
-
-
-    const registerData={
-        password:formData.get("password") ,
-        patient:{
-            name:formData.get("name"),
-            address:formData.get("address"),
-            email:formData.get("email"),
+export const registerPatient = async (_currentState: any, formData: any): Promise<any> => {
+    try {
+        console.log(formData.get("address"));
+        const payload = {
+            name: formData.get('name'),
+            address: formData.get('address'),
+            email: formData.get('email'),
+            password: formData.get('password'),
+            confirmPassword: formData.get('confirmPassword'),
         }
-    }
 
-    const newFormData = new FormData();
-    newFormData.append("data", JSON.stringify(registerData));
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/user/create-patient`, {
-        method: "POST",
-        body: newFormData,
-    })
-    const result= await res.json();
-   
-    if(result.success){
-        await loginUser(_currentState,formData)
-    }
-console.log(result)
-    return result
+        if (zodValidator(payload, registerPatientValidationZodSchema).success === false) {
+            return zodValidator(payload, registerPatientValidationZodSchema);
+        }
 
-} catch (error: any) {
-     // Re-throw NEXT_REDIRECT errors so Next.js can handle them
+        const validatedPayload: any = zodValidator(payload, registerPatientValidationZodSchema).data;
+        const registerData = {
+            password: validatedPayload.password,
+            patient: {
+                name: validatedPayload.name,
+                address: validatedPayload.address,
+                email: validatedPayload.email,
+            }
+        }
+
+        const newFormData = new FormData();
+
+        newFormData.append("data", JSON.stringify(registerData));
+
+        if (formData.get("file")) {
+            newFormData.append("file", formData.get("file") as Blob);
+        }
+
+        const res = await serverFetch.post("/user/create-patient", {
+            body: newFormData,
+        })
+
+        const result = await res.json();
+
+
+        if (result.success) {
+            await loginUser(_currentState, formData);
+        }
+
+        return result;
+
+
+
+    } catch (error: any) {
+        // Re-throw NEXT_REDIRECT errors so Next.js can handle them
         if (error?.digest?.startsWith('NEXT_REDIRECT')) {
             throw error;
         }
-    return { success: false, message: `${process.env.NODE_ENV === 'development' ?error.message : 'Login failed you might have provided wrong credentials'}`};
-}
+        console.log(error);
+        return { success: false, message: `${process.env.NODE_ENV === 'development' ? error.message : "Registration Failed. Please try again."}` };
+    }
 }
