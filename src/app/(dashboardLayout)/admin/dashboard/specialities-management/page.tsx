@@ -1,5 +1,6 @@
 
 import SpecialitiesManagementHeader from "@/components/modules/Admin/specialitiesManagement/SpecialitiesManagementHeader";
+import SpecialitiesTable from "@/components/modules/Admin/specialitiesManagement/SpecialitiesTable";
 import RefreshButton from "@/components/shared/RefreshButton";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { getSpecialities } from "@/services/admin/specialitiesManagement";
@@ -14,7 +15,7 @@ const AdminSpecialitiesManagementPage = async () => {
         <RefreshButton />
       </div>
       <Suspense fallback={<TableSkeleton columns={2} rows={10} />}>
-        {/* <SpecialitiesTable specialities={result.data} /> */}
+        <SpecialitiesTable specialities={result.data} />
       </Suspense>
     </div>
   );
