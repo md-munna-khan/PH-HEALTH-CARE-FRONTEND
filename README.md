@@ -6,3 +6,271 @@ Task:
 
 https://github.com/Apollo-Level2-Web-Dev/ph-health-care/blob/new-part-6/ADMIN_DASHBOARD_TASK.md
 ## 70-1 Creating Forms and Dialog (Modal) For Specialities Management Table
+
+- isntall dialog and alert dialog from shadcn ui 
+
+```
+npx shadcn@latest add dialog
+```
+
+```
+npx shadcn@latest add alert-dialog
+```
+
+- components -> modules -> Admin -> SpecialitiesManagement -> SpecialitiesFormDialog.tsx
+
+```tsx 
+"use client"
+import InputFieldError from "@/components/shared/InputFieldError";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { createSpeciality } from "@/services/admin/SpecialitiesManagement";
+import { useActionState, useEffect } from "react";
+import { toast } from "sonner";
+
+/*
+  SpecialitiesFormDialog
+  - Purpose: Modal dialog containing a form used to create a new medical specialty.
+  - Behavior summary:
+    * Uses `useActionState` with `createSpeciality` to get a form action, current request state, and a pending flag.
+    * Submits via the `action` attribute on the form (server/action-style or framework-provided helper).
+    * Displays success/error toast messages based on the returned `state` and closes the dialog on success.
+    * Shows inline field errors using `InputFieldError` which reads validation errors from `state`.
+
+  Notes about integration:
+  - `createSpeciality` should be an async function (server action) that returns an object with at least
+    `{ success: boolean, message?: string, errors?: Record<string, string> }` so `InputFieldError` can render errors.
+  - `useActionState` is a local helper hook (imported from project utilities or a library) that wires a form
+    `action` prop to the provided function and exposes the remote state and pending flag.
+*/
+
+interface ISpecialityFormDialogProps {
+    // `open` controls whether the dialog is visible.
+    open: boolean;
+    // `onClose` is called when the dialog should be closed (e.g., Cancel button or overlay click).
+    onClose: () => void;
+    // `onSuccess` is a callback for parent components to refresh lists or take action after a successful create.
+    onSuccess: () => void;
+}
+
+const SpecialitiesFormDialog = ({ open, onClose, onSuccess }: ISpecialityFormDialogProps) => {
+    /*
+      useActionState:
+      - `state`: the response object returned by `createSpeciality` (or null while idle).
+      - `formAction`: the value to pass to the form `action` attribute. This wires the form submission to the
+        `createSpeciality` handler so the framework can post the form data to it.
+      - `pending`: boolean that is true while a submission is in-flight. Used to disable controls.
+    */
+    const [state, formAction, pending] = useActionState(createSpeciality, null);
+
+    /*
+      Side-effect: react to server response state changes.
+      - On success: show toast, call parent `onSuccess` (to refresh list), and close dialog.
+      - On failure: show an error toast. Field-level errors are displayed inline by `InputFieldError`.
+    */
+    useEffect(() => {
+        if (state && state?.success) {
+            // Inform the user that the create succeeded and notify parent to update UI.
+            toast.success(state.message);
+            onSuccess();
+            onClose();
+        } else if (state && !state.success) {
+            // Show a global error message when available. Detailed field errors will still appear inline.
+            toast.error(state.message);
+        }
+    }, [state, onSuccess, onClose]);
+
+    return (
+        // `Dialog` is a composed UI primitive that handles overlay, focus trap and visibility.
+        <Dialog open={open} onOpenChange={onClose}>
+            <DialogContent>
+                <DialogHeader>
+                    {/* Title of the dialog; keep copy short and action-oriented. */}
+                    <DialogTitle>Add New Specialty</DialogTitle>
+                </DialogHeader>
+
+                {/*
+                  The form uses `action={formAction}` so submissions are handled by the provided server/client action.
+                  `className="space-y-4"` is a Tailwind utility to space form rows vertically.
+                */}
+                <form action={formAction} className="space-y-4">
+                    {/*
+                      Title field
+                      - `name` is required so the server action receives the value in `formData.get('title')`.
+                      - `required` provides basic client-side validation before submit.
+                    */}
+                    <Field>
+                        <FieldLabel htmlFor="title">Title</FieldLabel>
+                        <Input id="title" name="title" placeholder="Cardiology" required />
+                        {/* Renders validation error for the `title` field when `state.errors` contains it. */}
+                        <InputFieldError field="title" state={state} />
+                    </Field>
+
+                    {/*
+                      File upload for the icon/image representing the specialty.
+                      - `accept="image/*"` restricts to images. The server action should read the file from form data.
+                      - If the backend expects a specific field name (e.g., `icon`) update `name` accordingly.
+                    */}
+                    <Field>
+                        <FieldLabel htmlFor="file">Upload Icon</FieldLabel>
+                        <Input id="file" name="file" type="file" accept="image/*" />
+                        <InputFieldError field="file" state={state} />
+                    </Field>
+
+                    {/* Buttons row: Cancel (client-only) and Submit (form post). */}
+                    <div className="flex justify-end gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={onClose}
+                            // disable cancel while a submission is in flight to avoid race conditions.
+                            disabled={pending}
+                        >
+                            Cancel
+                        </Button>
+                        <Button type="submit" disabled={pending}>
+                            {/* Provide immediate feedback while saving. */}
+                            {pending ? "Saving..." : "Save Specialty"}
+                        </Button>
+                    </div>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+export default SpecialitiesFormDialog;
+```
+
+- components -> modules -> shared -> DeleteConfirmationDialog.tsx 
+
+```tsx 
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "../ui/alert-dialog";
+
+/*
+  DeleteConfirmationDialog
+
+  Purpose:
+  - A reusable confirmation dialog for destructive actions (delete/remove).
+  - Built from the project's `AlertDialog` primitives which handle overlay,
+    focus management, keyboard accessibility (Esc), and animations.
+
+  Key behaviors:
+  - `open` controls visibility of the dialog.
+  - `onOpenChange` is invoked when the dialog requests to change its open state
+    (e.g., user clicks overlay, presses Escape, or the dialog programmatically closes).
+  - `onConfirm` is the action executed when the user confirms the deletion.
+  - `isDeleting` disables UI controls and updates button text while an async
+    deletion operation is in progress, preventing duplicate submissions.
+
+  Integration notes:
+  - The parent component should manage the `open` state and provide `onOpenChange`.
+  - `onConfirm` should typically handle the delete request and update parent
+    state (e.g., refetch list or remove item locally). Provide `isDeleting` to
+    reflect pending network state for UX feedback.
+  - `title`, `description`, and `itemName` are optional. When `description`
+    is omitted, a sensible default message is shown using `itemName`.
+
+  Accessibility:
+  - Because this composes `AlertDialog` primitives, it inherits ARIA roles and
+    keyboard handling. Keep the title and description concise to help screen reader users.
+*/
+
+interface DeleteConfirmDialogProps {
+    // Controls whether the dialog is visible.
+    open: boolean;
+    // Called when the dialog requests an open/close change (overlay click, ESC, etc.).
+    onOpenChange: (open: boolean) => void;
+    // Callback to execute the deletion action when the user confirms.
+    onConfirm: () => void;
+    // Optional: dialog title shown at the top. Keep terse (e.g., "Delete specialty").
+    title?: string;
+    // Optional: full description. If omitted, component will render a default message using `itemName`.
+    description?: string;
+    // Optional: name of the item being deleted, used in the default description.
+    itemName?: string;
+    // Optional: when true, disables buttons and shows a loading label on the confirm button.
+    isDeleting?: boolean;
+}
+
+const DeleteConfirmationDialog = ({
+    open,
+    onOpenChange,
+    onConfirm,
+    title = "Confirm Deletion",
+    description,
+    itemName,
+    isDeleting = false,
+}: DeleteConfirmDialogProps) => {
+    /*
+      Component structure:
+      - `AlertDialog` is the root that accepts `open` and `onOpenChange`.
+      - `AlertDialogContent` contains header, description and footer actions.
+      - `AlertDialogHeader` groups `AlertDialogTitle` and `AlertDialogDescription`.
+      - `AlertDialogFooter` contains the cancel and confirm actions.
+  
+      The `AlertDialogCancel` and `AlertDialogAction` components map to the
+      secondary and primary actions respectively and integrate with the dialog
+      primitives to close the dialog when appropriate.
+    */
+    return (
+        <AlertDialog open={open} onOpenChange={onOpenChange}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    {/* The visible title — should clearly state the intent of the dialog. */}
+                    <AlertDialogTitle>{title}</AlertDialogTitle>
+
+                    {/*
+            Description text — either use an explicit `description` prop or render
+            a sensible default that interpolates `itemName` (if provided).
+            Use short sentences so screen readers convey the risk clearly.
+          */}
+                    <AlertDialogDescription>
+                        {description || (
+                            <>
+                                This will delete <strong>{itemName}</strong>. This action cannot
+                                be undone.
+                            </>
+                        )}
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+
+                <AlertDialogFooter>
+                    {/*
+            Cancel button: a non-destructive action that simply closes the dialog.
+            Disabled while `isDeleting` to prevent toggling during an in-flight request.
+          */}
+                    <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+
+                    {/*
+            Confirm/Delete action:
+            - Calls `onConfirm` when clicked.
+            - Disabled while `isDeleting` to avoid duplicate submissions.
+            - Uses utility classes for destructive styling from the design system.
+          */}
+                    <AlertDialogAction
+                        onClick={onConfirm}
+                        disabled={isDeleting}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                        {isDeleting ? "Deleting..." : "Delete"}
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    );
+};
+
+export default DeleteConfirmationDialog;
+```
