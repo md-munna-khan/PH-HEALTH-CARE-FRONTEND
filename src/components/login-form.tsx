@@ -1,35 +1,24 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
-
+import { loginUser } from "@/services/auth/loginUser";
 import { useActionState, useEffect } from "react";
+import { toast } from "sonner";
+import InputFieldError from "./shared/InputFieldError";
+import { Button } from "./ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "./ui/field";
 import { Input } from "./ui/input";
-import { loginUser } from "@/services/auth/loginUser";
-import { Button } from "./ui/button";
-import { toast } from "sonner";
 
-const LoginForm = ({ redirect }: { redirect?: string })=> {
+const LoginForm = ({ redirect }: { redirect?: string }) => {
   const [state, formAction, isPending] = useActionState(loginUser, null);
 
-   const getFieldError = (fieldName: string) => {
-    if (state?.error) {
-      const fieldError = state.error.find(
-        (err: { field: string }) => err.field === fieldName
-      );
-      return fieldError ? fieldError.message : null;
+  useEffect(() => {
+    if (state && !state.success && state.message) {
+      toast.error(state.message);
     }
-  };
-
-useEffect(()=>{
-  if(state && !state.success && state.message){
-    toast.error(state.message);
-  }
-},[state])
-
+  }, [state]);
 
   return (
     <form action={formAction}>
-         {redirect && <input type="hidden" name="redirect" value={redirect} />}
+      {redirect && <input type="hidden" name="redirect" value={redirect} />}
       <FieldGroup>
         <div className="grid grid-cols-1 gap-4">
           {/* Email */}
@@ -40,13 +29,10 @@ useEffect(()=>{
               name="email"
               type="email"
               placeholder="m@example.com"
-              // required
+              //   required
             />
-            {getFieldError("email") && (
-              <FieldDescription className="text-red-600">
-                {getFieldError("email")}
-              </FieldDescription>
-            )}
+
+            <InputFieldError field="email" state={state} />
           </Field>
 
           {/* Password */}
@@ -57,13 +43,9 @@ useEffect(()=>{
               name="password"
               type="password"
               placeholder="Enter your password"
-              // required
+              //   required
             />
-            {getFieldError("password") && (
-              <FieldDescription className="text-red-600">
-                {getFieldError("password")}
-              </FieldDescription>
-            )}
+            <InputFieldError field="password" state={state} />
           </Field>
         </div>
         <FieldGroup className="mt-4">
