@@ -1,4 +1,5 @@
 import DoctorsManagementHeader from "@/components/modules/Admin/DoctorsManagement/DoctorsManagementHeader";
+import DoctorsTable from "@/components/modules/Admin/DoctorsManagement/DoctorsTable";
 // import DoctorsTable from "@/components/modules/Admin/DoctorsManagement/DoctorsTable";
 import RefreshButton from "@/components/shared/RefreshButton";
 import SearchFilter from "@/components/shared/SearchFilter";
@@ -39,10 +40,10 @@ const AdminDoctorsManagementPage = async ({
         <RefreshButton />
       </div>
       <Suspense fallback={<TableSkeleton columns={10} rows={10} />}>
-        {/* <DoctorsTable
+        <DoctorsTable
           doctors={doctorsResult.data}
           specialities={specialitiesResult.data}
-        /> */}
+        />
         <TablePagination
           currentPage={doctorsResult.meta.page}
           totalPages={totalPages}
