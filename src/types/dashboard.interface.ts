@@ -1,6 +1,5 @@
 import { UserRole } from "@/lib/auth-utils";
 
-
 export interface NavItem {
     title: string;
     href: string;

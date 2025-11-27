@@ -1,6 +1,5 @@
 import { ManagementPageLoading } from "@/components/shared/ManagementPageLoader";
 
-
 const DoctorsManagementLoading = () => {
   return (
     <ManagementPageLoading

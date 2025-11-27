@@ -1,3 +1,4 @@
+import { IDoctorSchedule } from "./schedule.interface";
 
 export interface IDoctor {
     id?: string;
@@ -15,7 +16,6 @@ export interface IDoctor {
     designation: string;
     specialties?: string[];
     profilePhoto?: File | string;
-
     removeSpecialties?: string[];
     isDeleted?: boolean;
     averageRating?: number;
@@ -29,4 +29,6 @@ export interface IDoctor {
             icon?: string;
         };
     }>;
+
+    doctorSchedules?: IDoctorSchedule[];
 }
