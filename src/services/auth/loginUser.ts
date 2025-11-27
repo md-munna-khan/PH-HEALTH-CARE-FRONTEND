@@ -4,13 +4,11 @@
 import { getDefaultDashboardRoute, isValidRedirectForRole, UserRole } from "@/lib/auth-utils";
 import { serverFetch } from "@/lib/server-fetch";
 import { zodValidator } from "@/lib/zodValidator";
-
+import { loginValidationZodSchema } from "@/zod/auth.validation";
 import { parse } from "cookie";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import { redirect } from "next/navigation";
-import { setCookie } from "./tokenHandler";
-import { loginValidationZodSchema } from "@/zod/auth.validation";
-
+import { setCookie } from "./tokenHandlers";
 
 
 
@@ -92,6 +90,20 @@ export const loginUser = async (_currentState: any, formData: any): Promise<any>
         if (!result.success) {
             throw new Error(result.message || "Login failed");
         }
+
+        if (redirectTo && result.data.needPasswordChange) {
+            const requestedPath = redirectTo.toString();
+            if (isValidRedirectForRole(requestedPath, userRole)) {
+                redirect(`/reset-password?redirect=${requestedPath}`);
+            } else {
+                redirect("/reset-password");
+            }
+        }
+
+        if (result.data.needPasswordChange) {
+            redirect("/reset-password");
+        }
+
 
 
         if (redirectTo) {

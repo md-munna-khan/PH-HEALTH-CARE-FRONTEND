@@ -1,6 +1,5 @@
-
-import SpecialitiesManagementHeader from "@/components/modules/Admin/specialitiesManagement/SpecialitiesManagementHeader";
-import SpecialitiesTable from "@/components/modules/Admin/specialitiesManagement/SpecialitiesTable";
+import SpecialitiesManagementHeader from "@/components/modules/Admin/SpecialitiesManagement/SpecialitiesManagementHeader";
+import SpecialitiesTable from "@/components/modules/Admin/SpecialitiesManagement/SpecialitiesTable";
 import RefreshButton from "@/components/shared/RefreshButton";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { getSpecialities } from "@/services/admin/specialitiesManagement";
