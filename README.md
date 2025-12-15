@@ -1,1871 +1,249 @@
-# PH-HEALTH CARE PART-8
+# PH-HEALTH CARE PART-9 
 
-Frontend GitHub Link: https://github.com/Apollo-Level2-Web-Dev/ph-health-care/tree/new-part-8
+Frontend: https://github.com/Apollo-Level2-Web-Dev/ph-health-care/tree/new-part-9
+Backend: https://github.com/Apollo-Level2-Web-Dev/ph-health-care-server
 
+## 73-1 Analysing How The Appointment , Review And Prescription Will Work Between Doctor And Patient, 73-2 Creating Server Actions, Interfaces, Zod Validation For Appointment, Review And Prescription
 
-
-Backend GitHub Link: https://github.com/Apollo-Level2-Web-Dev/ph-health-care-server/tree/dev
-
-
-
-## 72-1 Completing Admin, Patient, Schedule, Appointment Pages
-
-- aLL THE RELEVANT PAGE AND COMPONENTS AND SERVICES ARE ADDED. CHECKOUT CODE 
-## 72-2 Completing Get Me And My Profile Page With Caching
-
-- Earlier we were fetching the user data from token now wer are going to fetch from out backend get me route.
+- src\types\appointments.interface.ts
 
 ```ts
-/* eslint-disable @typescript-eslint/no-explicit-any */
-"use server"
+import { IDoctor } from "./doctor.interface";
+import { IPatient } from "./patient.interface";
+import { IPrescription } from "./prescription.interface";
+import { IReview } from "./review.interface";
+import { ISchedule } from "./schedule.interface";
 
-import { serverFetch } from "@/lib/server-fetch";
-import { UserInfo } from "@/types/user.interface";
-import jwt, { JwtPayload } from "jsonwebtoken";
-import { getCookie } from "./tokenHandlers";
+export enum AppointmentStatus {
+    SCHEDULED = "SCHEDULED",
+    INPROGRESS = "INPROGRESS",
+    COMPLETED = "COMPLETED",
+    CANCELED = "CANCELED",
+}
 
-export const getUserInfo = async (): Promise<UserInfo | any> => {
-    let userInfo: UserInfo | any;
-    try {
+export enum PaymentStatus {
+    PAID = "PAID",
+    UNPAID = "UNPAID",
+}
 
-        const response = await serverFetch.get("/auth/me", {
-            cache: "force-cache",
-            next: { tags: ["user-info"] }
-        })
+export interface IAppointment {
+    id: string;
+    patientId: string;
+    patient?: IPatient;
+    doctorId: string;
+    doctor?: IDoctor;
+    scheduleId: string;
+    schedule?: ISchedule;
+    videoCallingId: string;
+    status: AppointmentStatus;
+    paymentStatus: PaymentStatus;
+    createdAt: string;
+    updatedAt: string;
+    prescription?: IPrescription;
+    review?: IReview;
+    // payment?: IPayment;
+}
 
-        const result = await response.json();
-
-        if (result.success) {
-            const accessToken = await getCookie("accessToken");
-
-            if (!accessToken) {
-                throw new Error("No access token found");
-            }
-
-            const verifiedToken = jwt.verify(accessToken, process.env.JWT_SECRET as string) as JwtPayload;
-
-            userInfo = {
-                name: verifiedToken.name || "Unknown User",
-                email: verifiedToken.email,
-                role: verifiedToken.role,
-            }
-        }
-
-        userInfo = {
-            name: result.data.admin?.name || result.data.doctor?.name || result.data.patient?.name || result.data.name || "Unknown User",
-            ...result.data
-        };
-
-
-
-        return userInfo;
-    } catch (error: any) {
-        console.log(error);
-        return {
-            id: "",
-            name: "Unknown User",
-            email: "",
-            role: "PATIENT",
-        };
-    }
-
+export interface IAppointmentFormData {
+    doctorId: string;
+    scheduleId: string;
 }
 ```
 
-- component -> modules -> MyProfile -> MyProfile.tsx
-
-```tsx
-"use client";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { getInitials } from "@/lib/formatters";
-import { updateMyProfile } from "@/services/auth/auth.service";
-import { UserInfo } from "@/types/user.interface";
-import { Camera, Loader2, Save } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-
-interface MyProfileProps {
-  userInfo: UserInfo;
-}
-
-const MyProfile = ({ userInfo }: MyProfileProps) => {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
-  const getProfilePhoto = () => {
-    if (userInfo.role === "ADMIN") {
-      return userInfo.admin?.profilePhoto;
-    } else if (userInfo.role === "DOCTOR") {
-      return userInfo.doctor?.profilePhoto;
-    } else if (userInfo.role === "PATIENT") {
-      return userInfo.patient?.profilePhoto;
-    }
-    return null;
-  };
-
-  const getProfileData = () => {
-    if (userInfo.role === "ADMIN") {
-      return userInfo.admin;
-    } else if (userInfo.role === "DOCTOR") {
-      return userInfo.doctor;
-    } else if (userInfo.role === "PATIENT") {
-      return userInfo.patient;
-    }
-    return null;
-  };
-
-  const profilePhoto = getProfilePhoto();
-  const profileData = getProfileData();
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreviewImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
-
-    const formData = new FormData(e.currentTarget);
-
-    startTransition(async () => {
-      const result = await updateMyProfile(formData);
-
-      if (result.success) {
-        setSuccess(result.message);
-        setPreviewImage(null);
-        router.refresh();
-      } else {
-        setError(result.message);
-      }
-    });
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-3xl font-bold">My Profile</h1>
-        <p className="text-muted-foreground mt-1">
-          Manage your personal information
-        </p>
-      </div>
-
-      <form onSubmit={handleSubmit}>
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Profile Card */}
-          <Card className="lg:col-span-1">
-            <CardHeader>
-              <CardTitle>Profile Picture</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center space-y-4">
-              <div className="relative">
-                <Avatar className="h-32 w-32">
-                  {previewImage || profilePhoto ? (
-                    <AvatarImage
-                      src={previewImage || (profilePhoto as string)}
-                      alt={userInfo.name}
-                    />
-                  ) : (
-                    <AvatarFallback className="text-3xl">
-                      {getInitials(userInfo.name)}
-                    </AvatarFallback>
-                  )}
-                </Avatar>
-                <label
-                  htmlFor="file"
-                  className="absolute bottom-0 right-0 bg-primary text-primary-foreground rounded-full p-2 cursor-pointer hover:bg-primary/90 transition-colors"
-                >
-                  <Camera className="h-4 w-4" />
-                  <Input
-                    type="file"
-                    id="file"
-                    name="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleImageChange}
-                    disabled={isPending}
-                  />
-                </label>
-              </div>
-
-              <div className="text-center">
-                <p className="font-semibold text-lg">{userInfo.name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {userInfo.email}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1 capitalize">
-                  {userInfo.role.replace("_", " ")}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Profile Information Card */}
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Personal Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {error && (
-                <div className="bg-destructive/10 text-destructive px-4 py-3 rounded-md text-sm">
-                  {error}
-                </div>
-              )}
-
-              {success && (
-                <div className="bg-green-500/10 text-green-600 px-4 py-3 rounded-md text-sm">
-                  {success}
-                </div>
-              )}
-
-              <div className="grid gap-4 md:grid-cols-2">
-                {/* Common Fields for All Roles */}
-                <div className="space-y-2">
-                  <Label htmlFor="name">Full Name</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    defaultValue={profileData?.name || userInfo.name}
-                    required
-                    disabled={isPending}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={userInfo.email}
-                    disabled
-                    className="bg-muted"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="contactNumber">Contact Number</Label>
-                  <Input
-                    id="contactNumber"
-                    name="contactNumber"
-                    defaultValue={profileData?.contactNumber || ""}
-                    required
-                    disabled={isPending}
-                  />
-                </div>
-
-                {/* Doctor-Specific Fields */}
-                {userInfo.role === "DOCTOR" && userInfo.doctor && (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="address">Address</Label>
-                      <Input
-                        id="address"
-                        name="address"
-                        defaultValue={userInfo.doctor.address || ""}
-                        disabled={isPending}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="registrationNumber">
-                        Registration Number
-                      </Label>
-                      <Input
-                        id="registrationNumber"
-                        name="registrationNumber"
-                        defaultValue={userInfo.doctor.registrationNumber || ""}
-                        required
-                        disabled={isPending}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="experience">Experience (Years)</Label>
-                      <Input
-                        id="experience"
-                        name="experience"
-                        type="number"
-                        defaultValue={userInfo.doctor.experience || ""}
-                        disabled={isPending}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="appointmentFee">Appointment Fee</Label>
-                      <Input
-                        id="appointmentFee"
-                        name="appointmentFee"
-                        type="number"
-                        defaultValue={userInfo.doctor.appointmentFee || ""}
-                        required
-                        disabled={isPending}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="qualification">Qualification</Label>
-                      <Input
-                        id="qualification"
-                        name="qualification"
-                        defaultValue={userInfo.doctor.qualification || ""}
-                        required
-                        disabled={isPending}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="currentWorkingPlace">
-                        Current Working Place
-                      </Label>
-                      <Input
-                        id="currentWorkingPlace"
-                        name="currentWorkingPlace"
-                        defaultValue={userInfo.doctor.currentWorkingPlace || ""}
-                        required
-                        disabled={isPending}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="designation">Designation</Label>
-                      <Input
-                        id="designation"
-                        name="designation"
-                        defaultValue={userInfo.doctor.designation || ""}
-                        required
-                        disabled={isPending}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="gender">Gender</Label>
-                      <select
-                        id="gender"
-                        name="gender"
-                        defaultValue={userInfo.doctor.gender || "MALE"}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                        disabled={isPending}
-                      >
-                        <option value="MALE">Male</option>
-                        <option value="FEMALE">Female</option>
-                      </select>
-                    </div>
-                  </>
-                )}
-
-                {/* Patient-Specific Fields */}
-                {userInfo.role === "PATIENT" && userInfo.patient && (
-                  <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="address">Address</Label>
-                    <Input
-                      id="address"
-                      name="address"
-                      defaultValue={userInfo.patient.address || ""}
-                      disabled={isPending}
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-end pt-4">
-                <Button type="submit" disabled={isPending}>
-                  {isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Updating...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 h-4 w-4" />
-                      Save Changes
-                    </>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </form>
-    </div>
-  );
-};
-
-export default MyProfile;
-
-```
-
-- services -> auth -> auth.service.ts
-
-```ts
-"use server";
-import { getDefaultDashboardRoute, isValidRedirectForRole, UserRole } from "@/lib/auth-utils";
-import { verifyAccessToken } from "@/lib/jwtHanlders";
-import { serverFetch } from "@/lib/server-fetch";
-import { zodValidator } from "@/lib/zodValidator";
-import { resetPasswordSchema } from "@/zod/auth.validation";
-import { parse } from "cookie";
-import jwt from "jsonwebtoken";
-import { revalidateTag } from "next/cache";
-import { redirect } from "next/navigation";
-import { getUserInfo } from "./getUserInfo";
-import { deleteCookie, getCookie, setCookie } from "./tokenHandlers";
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-export async function updateMyProfile(formData: FormData) {
-    try {
-        // Create a new FormData with the data property
-        const uploadFormData = new FormData();
-
-        // Get all form fields except the file
-        const data: any = {};
-        formData.forEach((value, key) => {
-            if (key !== 'file' && value) {
-                data[key] = value;
-            }
-        });
-
-        // Add the data as JSON string
-        uploadFormData.append('data', JSON.stringify(data));
-
-        // Add the file if it exists
-        const file = formData.get('file');
-        if (file && file instanceof File && file.size > 0) {
-            uploadFormData.append('file', file);
-        }
-
-        const response = await serverFetch.patch(`/user/update-my-profile`, {
-            body: uploadFormData,
-        });
-
-        const result = await response.json();
-
-        revalidateTag("user-info", { expire: 0 }); // we can set max here because it shows shows previous data while new data coming and finally shows new data 
-        return result;
-    } catch (error: any) {
-        console.log(error);
-        return {
-            success: false,
-            message: `${process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'}`
-        };
-    }
-}
-
-// Reset Password
-export async function resetPassword(_prevState: any, formData: FormData) {
-
-    const redirectTo = formData.get('redirect') || null;
-
-    // Build validation payload
-    const validationPayload = {
-        newPassword: formData.get("newPassword") as string,
-        confirmPassword: formData.get("confirmPassword") as string,
-    };
-
-    // Validate
-    const validatedPayload = zodValidator(validationPayload, resetPasswordSchema);
-
-    if (!validatedPayload.success && validatedPayload.errors) {
-        return {
-            success: false,
-            message: "Validation failed",
-            formData: validationPayload,
-            errors: validatedPayload.errors,
-        };
-    }
-
-    try {
-
-        const accessToken = await getCookie("accessToken");
-
-        if (!accessToken) {
-            throw new Error("User not authenticated");
-        }
-
-        const verifiedToken = jwt.verify(accessToken as string, process.env.JWT_SECRET!) as jwt.JwtPayload;
-        console.log(verifiedToken)
-
-        const userRole: UserRole = verifiedToken.role;
-
-        const user = await getUserInfo();
-        // API Call
-        const response = await serverFetch.post("/auth/reset-password", {
-            body: JSON.stringify({
-                id: user?.id,
-                password: validationPayload.newPassword,
-            }),
-            headers: {
-                "Authorization": accessToken,
-                "Content-Type": "application/json",
-            },
-        });
-
-        const result = await response.json();
-
-        if (!result.success) {
-            throw new Error(result.message || "Reset password failed");
-        }
-
-        if (result.success) {
-            // await get
-            revalidateTag("user-info", { expire: 0 });
-        }
-
-        if (redirectTo) {
-            const requestedPath = redirectTo.toString();
-            if (isValidRedirectForRole(requestedPath, userRole)) {
-                redirect(`${requestedPath}?loggedIn=true`);
-            } else {
-                redirect(`${getDefaultDashboardRoute(userRole)}?loggedIn=true`);
-            }
-        } else {
-            redirect(`${getDefaultDashboardRoute(userRole)}?loggedIn=true`);
-        }
-
-    } catch (error: any) {
-        // Re-throw NEXT_REDIRECT errors so Next.js can handle them
-        if (error?.digest?.startsWith("NEXT_REDIRECT")) {
-            throw error;
-        }
-        return {
-            success: false,
-            message: error?.message || "Something went wrong",
-            formData: validationPayload,
-        };
-    }
-}
-
-export async function getNewAccessToken() {
-    try {
-        const accessToken = await getCookie("accessToken");
-        const refreshToken = await getCookie("refreshToken");
-
-        //Case 1: Both tokens are missing - user is logged out
-        if (!accessToken && !refreshToken) {
-            return {
-                tokenRefreshed: false,
-            }
-        }
-
-        // Case 2 : Access Token exist- and need to verify
-        if (accessToken) {
-            const verifiedToken = await verifyAccessToken(accessToken);
-
-            if (verifiedToken.success) {
-                return {
-                    tokenRefreshed: false,
-                }
-            }
-        }
-
-        //Case 3 : refresh Token is missing- user is logged out
-        if (!refreshToken) {
-            return {
-                tokenRefreshed: false,
-            }
-        }
-
-        //Case 4: Access Token is invalid/expired- try to get a new one using refresh token
-        // This is the only case we need to call the API
-
-        // Now we know: accessToken is invalid/missing AND refreshToken exists
-        // Safe to call the API
-        let accessTokenObject: null | any = null;
-        let refreshTokenObject: null | any = null;
-
-        // API Call - serverFetch will skip getNewAccessToken for /auth/refresh-token endpoint
-        const response = await serverFetch.post("/auth/refresh-token", {
-            headers: {
-                Cookie: `refreshToken=${refreshToken}`,
-            },
-        });
-
-        const result = await response.json();
-
-        console.log("access token refreshed!!");
-
-        const setCookieHeaders = response.headers.getSetCookie();
-
-        if (setCookieHeaders && setCookieHeaders.length > 0) {
-            setCookieHeaders.forEach((cookie: string) => {
-                const parsedCookie = parse(cookie);
-
-                if (parsedCookie['accessToken']) {
-                    accessTokenObject = parsedCookie;
-                }
-                if (parsedCookie['refreshToken']) {
-                    refreshTokenObject = parsedCookie;
-                }
-            })
-        } else {
-            throw new Error("No Set-Cookie header found");
-        }
-
-        if (!accessTokenObject) {
-            throw new Error("Tokens not found in cookies");
-        }
-
-        if (!refreshTokenObject) {
-            throw new Error("Tokens not found in cookies");
-        }
-
-        await deleteCookie("accessToken");
-        await setCookie("accessToken", accessTokenObject.accessToken, {
-            secure: true,
-            httpOnly: true,
-            maxAge: parseInt(accessTokenObject['Max-Age']) || 1000 * 60 * 60,
-            path: accessTokenObject.Path || "/",
-            sameSite: accessTokenObject['SameSite'] || "none",
-        });
-
-        await deleteCookie("refreshToken");
-        await setCookie("refreshToken", refreshTokenObject.refreshToken, {
-            secure: true,
-            httpOnly: true,
-            maxAge: parseInt(refreshTokenObject['Max-Age']) || 1000 * 60 * 60 * 24 * 90,
-            path: refreshTokenObject.Path || "/",
-            sameSite: refreshTokenObject['SameSite'] || "none",
-        });
-
-        if (!result.success) {
-            throw new Error(result.message || "Token refresh failed");
-        }
-
-
-        return {
-            tokenRefreshed: true,
-            success: true,
-            message: "Token refreshed successfully"
-        };
-
-
-    } catch (error: any) {
-        return {
-            tokenRefreshed: false,
-            success: false,
-            message: error?.message || "Something went wrong",
-        };
-    }
-
-}
-```
-
-- (DashboardLayout) -> (commonProtectedLayout) -> (my-profile) -> page.tsx
-
-```tsx 
-import MyProfile from "@/components/modules/MyProfile/MyProfile";
-import { getUserInfo } from "@/services/auth/getUserInfo";
-
-const MyProfilePage = async () => {
-  const userInfo = await getUserInfo();
-  return <MyProfile userInfo={userInfo} />;
-};
-
-export default MyProfilePage;
-
-```
-
-## 72-3 Reset Password Pages For Admin and Doctor Role
-
-- (commonLayout) -> (auth) -> reset-password -> page.tsx
-
-```tsx
-import ResetPasswordForm from "@/components/ResetPasswordForm";
-
-const ResetPasswordPage = async ({
-  searchParams,
-}: {
-  searchParams?: Promise<{ redirect?: string }>;
-}) => {
-  const params = (await searchParams) || {};
-  const redirect = params.redirect;
-  return (
-    <div className="flex min-h-screen items-center justify-center">
-      <div className="w-full max-w-md space-y-6 rounded-lg border p-8 shadow-lg">
-        <div className="space-y-2 text-center">
-          <h1 className="text-3xl font-bold">Reset Your Password</h1>
-          <p className="text-muted-foreground">
-            Enter your new password below to reset your account password
-          </p>
-        </div>
-        <ResetPasswordForm redirect={redirect} />
-      </div>
-    </div>
-  );
-};
-
-export default ResetPasswordPage;
-
-```
-
-- components -> ResetPasswordForm.tsx
-
-```tsx
-/* eslint-disable @typescript-eslint/no-explicit-any */
-"use client";
-
-import InputFieldError from "@/components/shared/InputFieldError";
-import { Button } from "@/components/ui/button";
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { resetPassword } from "@/services/auth/auth.service";
-import { useActionState, useEffect } from "react";
-import { toast } from "sonner";
-
-const ResetPasswordForm = ({ redirect }: { redirect?: string }) => {
-  const [state, formAction, isPending] = useActionState(resetPassword, null);
-
-  useEffect(() => {
-    if (state && !state.success && state.message) {
-      toast.error(state.message);
-      console.log(state)
-    }
-  }, [state]);
-
-  return (
-    <form action={formAction}>
-      {redirect && <Input type="hidden" name="redirect" value={redirect} />}
-      <FieldGroup>
-        <div className="grid grid-cols-1 gap-4">
-          {/* New Password */}
-          <Field>
-            <FieldLabel htmlFor="newPassword">New Password</FieldLabel>
-            <Input
-              id="newPassword"
-              name="newPassword"
-              type="password"
-              placeholder="Enter new password"
-              autoComplete="new-password"
-            />
-            <InputFieldError field="newPassword" state={state as any} />
-          </Field>
-
-          {/* Confirm Password */}
-          <Field>
-            <FieldLabel htmlFor="confirmPassword">Confirm Password</FieldLabel>
-            <Input
-              id="confirmPassword"
-              name="confirmPassword"
-              type="password"
-              placeholder="Confirm new password"
-              autoComplete="new-password"
-            />
-            <InputFieldError field="confirmPassword" state={state as any} />
-          </Field>
-        </div>
-
-        <FieldGroup className="mt-4">
-          <Field>
-            <Button type="submit" disabled={isPending} className="w-full">
-              {isPending ? "Resetting..." : "Reset Password"}
-            </Button>
-
-            <FieldDescription className="px-6 text-center mt-4">
-              Remember your password?{" "}
-              <a href="/login" className="text-blue-600 hover:underline">
-                Back to Login
-              </a>
-            </FieldDescription>
-          </Field>
-        </FieldGroup>
-      </FieldGroup>
-    </form>
-  );
-};
-
-export default ResetPasswordForm;
-
-```
-
-- services -> auth -> auth.service.ts
-
-```ts
-"use server";
-import { getDefaultDashboardRoute, isValidRedirectForRole, UserRole } from "@/lib/auth-utils";
-import { verifyAccessToken } from "@/lib/jwtHanlders";
-import { serverFetch } from "@/lib/server-fetch";
-import { zodValidator } from "@/lib/zodValidator";
-import { resetPasswordSchema } from "@/zod/auth.validation";
-import { parse } from "cookie";
-import jwt from "jsonwebtoken";
-import { revalidateTag } from "next/cache";
-import { redirect } from "next/navigation";
-import { getUserInfo } from "./getUserInfo";
-import { deleteCookie, getCookie, setCookie } from "./tokenHandlers";
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-export async function updateMyProfile(formData: FormData) {
-    try {
-        // Create a new FormData with the data property
-        const uploadFormData = new FormData();
-
-        // Get all form fields except the file
-        const data: any = {};
-        formData.forEach((value, key) => {
-            if (key !== 'file' && value) {
-                data[key] = value;
-            }
-        });
-
-        // Add the data as JSON string
-        uploadFormData.append('data', JSON.stringify(data));
-
-        // Add the file if it exists
-        const file = formData.get('file');
-        if (file && file instanceof File && file.size > 0) {
-            uploadFormData.append('file', file);
-        }
-
-        const response = await serverFetch.patch(`/user/update-my-profile`, {
-            body: uploadFormData,
-        });
-
-        const result = await response.json();
-
-        revalidateTag("user-info", { expire: 0 });
-        return result;
-    } catch (error: any) {
-        console.log(error);
-        return {
-            success: false,
-            message: `${process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'}`
-        };
-    }
-}
-
-// Reset Password
-export async function resetPassword(_prevState: any, formData: FormData) {
-
-    const redirectTo = formData.get('redirect') || null;
-
-    // Build validation payload
-    const validationPayload = {
-        newPassword: formData.get("newPassword") as string,
-        confirmPassword: formData.get("confirmPassword") as string,
-    };
-
-    // Validate
-    const validatedPayload = zodValidator(validationPayload, resetPasswordSchema);
-
-    if (!validatedPayload.success && validatedPayload.errors) {
-        return {
-            success: false,
-            message: "Validation failed",
-            formData: validationPayload,
-            errors: validatedPayload.errors,
-        };
-    }
-
-    try {
-
-        const accessToken = await getCookie("accessToken");
-
-        if (!accessToken) {
-            throw new Error("User not authenticated");
-        }
-
-        const verifiedToken = jwt.verify(accessToken as string, process.env.JWT_SECRET!) as jwt.JwtPayload;
-        console.log(verifiedToken)
-
-        const userRole: UserRole = verifiedToken.role;
-
-        const user = await getUserInfo();
-        // API Call
-        const response = await serverFetch.post("/auth/reset-password", {
-            body: JSON.stringify({
-                id: user?.id,
-                password: validationPayload.newPassword,
-            }),
-            headers: {
-                "Authorization": accessToken,
-                "Content-Type": "application/json",
-            },
-        });
-
-        const result = await response.json();
-
-        if (!result.success) {
-            throw new Error(result.message || "Reset password failed");
-        }
-
-        if (result.success) {
-            // await get
-            revalidateTag("user-info", { expire: 0 });
-        }
-
-        if (redirectTo) {
-            const requestedPath = redirectTo.toString();
-            if (isValidRedirectForRole(requestedPath, userRole)) {
-                redirect(`${requestedPath}?loggedIn=true`);
-            } else {
-                redirect(`${getDefaultDashboardRoute(userRole)}?loggedIn=true`);
-            }
-        } else {
-            redirect(`${getDefaultDashboardRoute(userRole)}?loggedIn=true`);
-        }
-
-    } catch (error: any) {
-        // Re-throw NEXT_REDIRECT errors so Next.js can handle them
-        if (error?.digest?.startsWith("NEXT_REDIRECT")) {
-            throw error;
-        }
-        return {
-            success: false,
-            message: error?.message || "Something went wrong",
-            formData: validationPayload,
-        };
-    }
-}
-
-export async function getNewAccessToken() {
-    try {
-        const accessToken = await getCookie("accessToken");
-        const refreshToken = await getCookie("refreshToken");
-
-        //Case 1: Both tokens are missing - user is logged out
-        if (!accessToken && !refreshToken) {
-            return {
-                tokenRefreshed: false,
-            }
-        }
-
-        // Case 2 : Access Token exist- and need to verify
-        if (accessToken) {
-            const verifiedToken = await verifyAccessToken(accessToken);
-
-            if (verifiedToken.success) {
-                return {
-                    tokenRefreshed: false,
-                }
-            }
-        }
-
-        //Case 3 : refresh Token is missing- user is logged out
-        if (!refreshToken) {
-            return {
-                tokenRefreshed: false,
-            }
-        }
-
-        //Case 4: Access Token is invalid/expired- try to get a new one using refresh token
-        // This is the only case we need to call the API
-
-        // Now we know: accessToken is invalid/missing AND refreshToken exists
-        // Safe to call the API
-        let accessTokenObject: null | any = null;
-        let refreshTokenObject: null | any = null;
-
-        // API Call - serverFetch will skip getNewAccessToken for /auth/refresh-token endpoint
-        const response = await serverFetch.post("/auth/refresh-token", {
-            headers: {
-                Cookie: `refreshToken=${refreshToken}`,
-            },
-        });
-
-        const result = await response.json();
-
-        console.log("access token refreshed!!");
-
-        const setCookieHeaders = response.headers.getSetCookie();
-
-        if (setCookieHeaders && setCookieHeaders.length > 0) {
-            setCookieHeaders.forEach((cookie: string) => {
-                const parsedCookie = parse(cookie);
-
-                if (parsedCookie['accessToken']) {
-                    accessTokenObject = parsedCookie;
-                }
-                if (parsedCookie['refreshToken']) {
-                    refreshTokenObject = parsedCookie;
-                }
-            })
-        } else {
-            throw new Error("No Set-Cookie header found");
-        }
-
-        if (!accessTokenObject) {
-            throw new Error("Tokens not found in cookies");
-        }
-
-        if (!refreshTokenObject) {
-            throw new Error("Tokens not found in cookies");
-        }
-
-        await deleteCookie("accessToken");
-        await setCookie("accessToken", accessTokenObject.accessToken, {
-            secure: true,
-            httpOnly: true,
-            maxAge: parseInt(accessTokenObject['Max-Age']) || 1000 * 60 * 60,
-            path: accessTokenObject.Path || "/",
-            sameSite: accessTokenObject['SameSite'] || "none",
-        });
-
-        await deleteCookie("refreshToken");
-        await setCookie("refreshToken", refreshTokenObject.refreshToken, {
-            secure: true,
-            httpOnly: true,
-            maxAge: parseInt(refreshTokenObject['Max-Age']) || 1000 * 60 * 60 * 24 * 90,
-            path: refreshTokenObject.Path || "/",
-            sameSite: refreshTokenObject['SameSite'] || "none",
-        });
-
-        if (!result.success) {
-            throw new Error(result.message || "Token refresh failed");
-        }
-
-
-        return {
-            tokenRefreshed: true,
-            success: true,
-            message: "Token refreshed successfully"
-        };
-
-
-    } catch (error: any) {
-        return {
-            tokenRefreshed: false,
-            success: false,
-            message: error?.message || "Something went wrong",
-        };
-    }
-
-}
-```
-
-## 72-4 Adding Needs Password Change Block From Proxy File
-
-- while login check if password needed. If Password needed take to reset password change
-
-- services -> auth -> loginUser.ts 
+-  src\types\prescription.interface.ts
 
 ```ts 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-"use server"
+import { IAppointment } from "./appointments.interface";
+import { IDoctor } from "./doctor.interface";
+import { IPatient } from "./patient.interface";
 
-import { getDefaultDashboardRoute, isValidRedirectForRole, UserRole } from "@/lib/auth-utils";
-import { serverFetch } from "@/lib/server-fetch";
-import { zodValidator } from "@/lib/zodValidator";
-import { loginValidationZodSchema } from "@/zod/auth.validation";
-import { parse } from "cookie";
-import jwt, { JwtPayload } from "jsonwebtoken";
-import { redirect } from "next/navigation";
-import { setCookie } from "./tokenHandlers";
+export interface IPrescription {
+    id: string;
+    appointmentId: string;
+    appointment?: IAppointment;
+    doctorId: string;
+    doctor?: IDoctor;
+    patientId: string;
+    patient?: IPatient;
+    instructions: string;
+    followUpDate?: string | null;
+    createdAt: string;
+    updatedAt: string;
+}
 
-
-
-export const loginUser = async (_currentState: any, formData: any): Promise<any> => {
-    try {
-        const redirectTo = formData.get('redirect') || null;
-        let accessTokenObject: null | any = null;
-        let refreshTokenObject: null | any = null;
-        const payload = {
-            email: formData.get('email'),
-            password: formData.get('password'),
-        }
-
-        if (zodValidator(payload, loginValidationZodSchema).success === false) {
-            return zodValidator(payload, loginValidationZodSchema);
-        }
-
-        const validatedPayload = zodValidator(payload, loginValidationZodSchema).data;
-
-        const res = await serverFetch.post("/auth/login", {
-            body: JSON.stringify(validatedPayload),
-            headers: {
-                "Content-Type": "application/json",
-            }
-        });
-
-        const result = await res.json();
-
-        const setCookieHeaders = res.headers.getSetCookie();
-
-        if (setCookieHeaders && setCookieHeaders.length > 0) {
-            setCookieHeaders.forEach((cookie: string) => {
-                const parsedCookie = parse(cookie);
-
-                if (parsedCookie['accessToken']) {
-                    accessTokenObject = parsedCookie;
-                }
-                if (parsedCookie['refreshToken']) {
-                    refreshTokenObject = parsedCookie;
-                }
-            })
-        } else {
-            throw new Error("No Set-Cookie header found");
-        }
-
-        if (!accessTokenObject) {
-            throw new Error("Tokens not found in cookies");
-        }
-
-        if (!refreshTokenObject) {
-            throw new Error("Tokens not found in cookies");
-        }
-
-
-        await setCookie("accessToken", accessTokenObject.accessToken, {
-            secure: true,
-            httpOnly: true,
-            maxAge: parseInt(accessTokenObject['Max-Age']) || 1000 * 60 * 60,
-            path: accessTokenObject.Path || "/",
-            sameSite: accessTokenObject['SameSite'] || "none",
-        });
-
-        await setCookie("refreshToken", refreshTokenObject.refreshToken, {
-            secure: true,
-            httpOnly: true,
-            maxAge: parseInt(refreshTokenObject['Max-Age']) || 1000 * 60 * 60 * 24 * 90,
-            path: refreshTokenObject.Path || "/",
-            sameSite: refreshTokenObject['SameSite'] || "none",
-        });
-        const verifiedToken: JwtPayload | string = jwt.verify(accessTokenObject.accessToken, process.env.JWT_SECRET as string);
-
-        if (typeof verifiedToken === "string") {
-            throw new Error("Invalid token");
-
-        }
-
-        const userRole: UserRole = verifiedToken.role;
-
-        if (!result.success) {
-            throw new Error(result.message || "Login failed");
-        }
-
-        if (redirectTo && result.data.needPasswordChange) {
-            const requestedPath = redirectTo.toString();
-            if (isValidRedirectForRole(requestedPath, userRole)) {
-                redirect(`/reset-password?redirect=${requestedPath}`);
-            } else {
-                redirect("/reset-password");
-            }
-        }
-
-        if (result.data.needPasswordChange) {
-            redirect("/reset-password");
-        }
-
-
-
-        if (redirectTo) {
-            const requestedPath = redirectTo.toString();
-            if (isValidRedirectForRole(requestedPath, userRole)) {
-                redirect(`${requestedPath}?loggedIn=true`);
-            } else {
-                redirect(`${getDefaultDashboardRoute(userRole)}?loggedIn=true`);
-            }
-        } else {
-            redirect(`${getDefaultDashboardRoute(userRole)}?loggedIn=true`);
-        }
-
-    } catch (error: any) {
-        // Re-throw NEXT_REDIRECT errors so Next.js can handle them
-        if (error?.digest?.startsWith('NEXT_REDIRECT')) {
-            throw error;
-        }
-        console.log(error);
-        return { success: false, message: `${process.env.NODE_ENV === 'development' ? error.message : "Login Failed. You might have entered incorrect email or password."}` };
-    }
+export interface IPrescriptionFormData {
+    appointmentId: string;
+    instructions: string;
+    followUpDate?: string;
 }
 ```
 
-- lets make a functionality that prevents user from accessing reset password page after one time reset 
-- proxy.ts 
+- src\types\review.interface.ts
 
 ```ts 
-import jwt, { JwtPayload } from 'jsonwebtoken';
-import type { NextRequest } from 'next/server';
-import { NextResponse } from 'next/server';
-import { getDefaultDashboardRoute, getRouteOwner, isAuthRoute, UserRole } from './lib/auth-utils';
-import { getUserInfo } from './services/auth/getUserInfo';
-import { deleteCookie, getCookie } from './services/auth/tokenHandlers';
-import { getNewAccessToken } from './services/auth/auth.service';
+import { IAppointment } from "./appointments.interface";
+import { IDoctor } from "./doctor.interface";
+import { IPatient } from "./patient.interface";
 
-
-
-// This function can be marked `async` if using `await` inside
-export async function proxy(request: NextRequest) {
-    const pathname = request.nextUrl.pathname;
-    const hasTokenRefreshedParam = request.nextUrl.searchParams.has('tokenRefreshed');
-
-    // If coming back after token refresh, remove the param and continue
-    if (hasTokenRefreshedParam) {
-        const url = request.nextUrl.clone();
-        url.searchParams.delete('tokenRefreshed');
-        return NextResponse.redirect(url);
-    }
-
-    const tokenRefreshResult = await getNewAccessToken();
-
-    // If token was refreshed, redirect to same page to fetch with new token
-    if (tokenRefreshResult?.tokenRefreshed) {
-        const url = request.nextUrl.clone();
-        url.searchParams.set('tokenRefreshed', 'true');
-        return NextResponse.redirect(url);
-    }
-
-    // const accessToken = request.cookies.get("accessToken")?.value || null;
-
-    const accessToken = await getCookie("accessToken") || null;
-
-    let userRole: UserRole | null = null;
-    if (accessToken) {
-        const verifiedToken: JwtPayload | string = jwt.verify(accessToken, process.env.JWT_SECRET as string);
-
-        if (typeof verifiedToken === "string") {
-            await deleteCookie("accessToken");
-            await deleteCookie("refreshToken");
-            return NextResponse.redirect(new URL('/login', request.url));
-        }
-
-        userRole = verifiedToken.role;
-    }
-
-    const routerOwner = getRouteOwner(pathname);
-    //path = /doctor/appointments => "DOCTOR"
-    //path = /my-profile => "COMMON"
-    //path = /login => null
-
-    const isAuth = isAuthRoute(pathname)
-
-    // Rule 1 : User is logged in and trying to access auth route. Redirect to default dashboard
-    if (accessToken && isAuth) {
-        return NextResponse.redirect(new URL(getDefaultDashboardRoute(userRole as UserRole), request.url))
-    }
-
-
-    // Rule 2 : User is trying to access open public route
-    if (routerOwner === null) {
-        return NextResponse.next();
-    }
-
-    // Rule 1 & 2 for open public routes and auth routes
-
-    if (!accessToken) {
-        const loginUrl = new URL("/login", request.url);
-        loginUrl.searchParams.set("redirect", pathname);
-        return NextResponse.redirect(loginUrl);
-    }
-
-    // Rule 3 : User need password change
-
-    if (accessToken) {
-        const userInfo = await getUserInfo();
-        if (userInfo.needPasswordChange) {
-            if (pathname !== "/reset-password") {
-                const resetPasswordUrl = new URL("/reset-password", request.url);
-                resetPasswordUrl.searchParams.set("redirect", pathname);
-                return NextResponse.redirect(resetPasswordUrl);
-            }
-            return NextResponse.next();
-        }
-
-        if (userInfo && !userInfo.needPasswordChange && pathname === '/reset-password') {
-            return NextResponse.redirect(new URL(getDefaultDashboardRoute(userRole as UserRole), request.url));
-        }
-    }
-
-    // Rule 4 : User is trying to access common protected route
-    if (routerOwner === "COMMON") {
-        return NextResponse.next();
-    }
-
-    // Rule 5 : User is trying to access role based protected route
-    if (routerOwner === "ADMIN" || routerOwner === "DOCTOR" || routerOwner === "PATIENT") {
-        if (userRole !== routerOwner) {
-            return NextResponse.redirect(new URL(getDefaultDashboardRoute(userRole as UserRole), request.url))
-        }
-    }
-
-    return NextResponse.next();
+export interface IReview {
+    id: string;
+    patientId: string;
+    patient?: IPatient;
+    doctorId: string;
+    doctor?: IDoctor;
+    appointmentId: string;
+    appointment?: IAppointment;
+    rating: number;
+    comment: string;
+    createdAt: string;
+    updatedAt: string;
 }
 
-
-
-export const config = {
-    matcher: [
-        /*
-         * Match all request paths except for the ones starting with:
-         * - api (API routes)
-         * - _next/static (static files)
-         * - _next/image (image optimization files)
-         * - favicon.ico, sitemap.xml, robots.txt (metadata files)
-         */
-        '/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.well-known).*)',
-    ],
+export interface IReviewFormData {
+    appointmentId: string;
+    rating: number;
+    comment: string;
 }
 ```
 
-## 72-5 Analysing How Refresh Token Will Work In NextJS
+- also zod added checkout codes 
 
+- src\services\patient\appointment.service.ts
 
-- To Provide a user better experience and to prevent user from unexpect logout while doing a work if the access token expired. we will implement a monitoring system that will; monitor and while routing in page (in proxy file) or button api call(server action server fetch ) if access token it will re revive the logged in state by doing refreshing token using refresh token.
-
-## 72-6 Getting New Access Token With Refresh Token Functionality
-
-- lib -> jwtHandlers.ts
-
-```ts
+```ts 
+"use server"
 /* eslint-disable @typescript-eslint/no-explicit-any */
-"use server";
-
-import jwt from "jsonwebtoken";
-
-export const verifyAccessToken = async (token: string) => {
-    try {
-        const verifiedAccessToken = jwt.verify(
-            token,
-            process.env.JWT_SECRET!
-        ) as jwt.JwtPayload;
-
-        return {
-            success: true,
-            message: "Token is valid",
-            payload: verifiedAccessToken,
-        };
-    } catch (error: any) {
-        return {
-            success: false,
-            message: error?.message || "Invalid token",
-        };
-    }
-};
-
-```
-
-- services -> auth -> auth.service.ts
-
-```ts
-"use server";
-import { getDefaultDashboardRoute, isValidRedirectForRole, UserRole } from "@/lib/auth-utils";
-import { verifyAccessToken } from "@/lib/jwtHanlders";
 import { serverFetch } from "@/lib/server-fetch";
-import { zodValidator } from "@/lib/zodValidator";
-import { resetPasswordSchema } from "@/zod/auth.validation";
-import { parse } from "cookie";
-import jwt from "jsonwebtoken";
-import { revalidateTag } from "next/cache";
-import { redirect } from "next/navigation";
-import { getUserInfo } from "./getUserInfo";
-import { deleteCookie, getCookie, setCookie } from "./tokenHandlers";
+import { IAppointmentFormData } from "@/types/appointments.interface";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-export async function updateMyProfile(formData: FormData) {
+export async function createAppointment(data: IAppointmentFormData) {
     try {
-        // Create a new FormData with the data property
-        const uploadFormData = new FormData();
-
-        // Get all form fields except the file
-        const data: any = {};
-        formData.forEach((value, key) => {
-            if (key !== 'file' && value) {
-                data[key] = value;
-            }
-        });
-
-        // Add the data as JSON string
-        uploadFormData.append('data', JSON.stringify(data));
-
-        // Add the file if it exists
-        const file = formData.get('file');
-        if (file && file instanceof File && file.size > 0) {
-            uploadFormData.append('file', file);
-        }
-
-        const response = await serverFetch.patch(`/user/update-my-profile`, {
-            body: uploadFormData,
-        });
-
-        const result = await response.json();
-
-        revalidateTag("user-info", { expire: 0 });
-        return result;
-    } catch (error: any) {
-        console.log(error);
-        return {
-            success: false,
-            message: `${process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'}`
-        };
-    }
-}
-
-// Reset Password
-export async function resetPassword(_prevState: any, formData: FormData) {
-
-    const redirectTo = formData.get('redirect') || null;
-
-    // Build validation payload
-    const validationPayload = {
-        newPassword: formData.get("newPassword") as string,
-        confirmPassword: formData.get("confirmPassword") as string,
-    };
-
-    // Validate
-    const validatedPayload = zodValidator(validationPayload, resetPasswordSchema);
-
-    if (!validatedPayload.success && validatedPayload.errors) {
-        return {
-            success: false,
-            message: "Validation failed",
-            formData: validationPayload,
-            errors: validatedPayload.errors,
-        };
-    }
-
-    try {
-
-        const accessToken = await getCookie("accessToken");
-
-        if (!accessToken) {
-            throw new Error("User not authenticated");
-        }
-
-        const verifiedToken = jwt.verify(accessToken as string, process.env.JWT_SECRET!) as jwt.JwtPayload;
-        console.log(verifiedToken)
-
-        const userRole: UserRole = verifiedToken.role;
-
-        const user = await getUserInfo();
-        // API Call
-        const response = await serverFetch.post("/auth/reset-password", {
-            body: JSON.stringify({
-                id: user?.id,
-                password: validationPayload.newPassword,
-            }),
+        const response = await serverFetch.post("/appointment", {
+            body: JSON.stringify(data),
             headers: {
-                "Authorization": accessToken,
                 "Content-Type": "application/json",
             },
         });
 
         const result = await response.json();
-
-        if (!result.success) {
-            throw new Error(result.message || "Reset password failed");
-        }
-
-        if (result.success) {
-            // await get
-            revalidateTag("user-info", { expire: 0 });
-        }
-
-        if (redirectTo) {
-            const requestedPath = redirectTo.toString();
-            if (isValidRedirectForRole(requestedPath, userRole)) {
-                redirect(`${requestedPath}?loggedIn=true`);
-            } else {
-                redirect(`${getDefaultDashboardRoute(userRole)}?loggedIn=true`);
-            }
-        } else {
-            redirect(`${getDefaultDashboardRoute(userRole)}?loggedIn=true`);
-        }
-
+        return result;
     } catch (error: any) {
-        // Re-throw NEXT_REDIRECT errors so Next.js can handle them
-        if (error?.digest?.startsWith("NEXT_REDIRECT")) {
-            throw error;
-        }
+        console.error("Error creating appointment:", error);
         return {
             success: false,
-            message: error?.message || "Something went wrong",
-            formData: validationPayload,
+            message:
+                process.env.NODE_ENV === "development"
+                    ? error.message
+                    : "Failed to book appointment",
         };
     }
 }
 
-export async function getNewAccessToken() {
+export async function getMyAppointments(queryString?: string) {
     try {
-        const accessToken = await getCookie("accessToken");
-        const refreshToken = await getCookie("refreshToken");
-
-        //Case 1: Both tokens are missing - user is logged out
-        if (!accessToken && !refreshToken) {
-            return {
-                tokenRefreshed: false,
-            }
-        }
-
-        // Case 2 : Access Token exist- and need to verify
-        if (accessToken) {
-            const verifiedToken = await verifyAccessToken(accessToken);
-
-            if (verifiedToken.success) {
-                return {
-                    tokenRefreshed: false,
-                }
-            }
-        }
-
-        //Case 3 : refresh Token is missing- user is logged out
-        if (!refreshToken) {
-            return {
-                tokenRefreshed: false,
-            }
-        }
-
-        //Case 4: Access Token is invalid/expired- try to get a new one using refresh token
-        // This is the only case we need to call the API
-
-        // Now we know: accessToken is invalid/missing AND refreshToken exists
-        // Safe to call the API
-        let accessTokenObject: null | any = null;
-        let refreshTokenObject: null | any = null;
-
-        // API Call - serverFetch will skip getNewAccessToken for /auth/refresh-token endpoint
-        const response = await serverFetch.post("/auth/refresh-token", {
-            headers: {
-                Cookie: `refreshToken=${refreshToken}`,
-            },
-        });
-
+        const response = await serverFetch.get(
+            `/appointment/my-appointment${queryString ? `?${queryString}` : "?sortBy=createdAt&sortOrder=desc"}`
+        );
         const result = await response.json();
-
-        console.log("access token refreshed!!");
-
-        const setCookieHeaders = response.headers.getSetCookie();
-
-        if (setCookieHeaders && setCookieHeaders.length > 0) {
-            setCookieHeaders.forEach((cookie: string) => {
-                const parsedCookie = parse(cookie);
-
-                if (parsedCookie['accessToken']) {
-                    accessTokenObject = parsedCookie;
-                }
-                if (parsedCookie['refreshToken']) {
-                    refreshTokenObject = parsedCookie;
-                }
-            })
-        } else {
-            throw new Error("No Set-Cookie header found");
-        }
-
-        if (!accessTokenObject) {
-            throw new Error("Tokens not found in cookies");
-        }
-
-        if (!refreshTokenObject) {
-            throw new Error("Tokens not found in cookies");
-        }
-
-        await deleteCookie("accessToken");
-        await setCookie("accessToken", accessTokenObject.accessToken, {
-            secure: true,
-            httpOnly: true,
-            maxAge: parseInt(accessTokenObject['Max-Age']) || 1000 * 60 * 60,
-            path: accessTokenObject.Path || "/",
-            sameSite: accessTokenObject['SameSite'] || "none",
-        });
-
-        await deleteCookie("refreshToken");
-        await setCookie("refreshToken", refreshTokenObject.refreshToken, {
-            secure: true,
-            httpOnly: true,
-            maxAge: parseInt(refreshTokenObject['Max-Age']) || 1000 * 60 * 60 * 24 * 90,
-            path: refreshTokenObject.Path || "/",
-            sameSite: refreshTokenObject['SameSite'] || "none",
-        });
-
-        if (!result.success) {
-            throw new Error(result.message || "Token refresh failed");
-        }
-
-
-        return {
-            tokenRefreshed: true,
-            success: true,
-            message: "Token refreshed successfully"
-        };
-
-
+        console.log({ result });
+        return result;
     } catch (error: any) {
-        return {
-            tokenRefreshed: false,
-            success: false,
-            message: error?.message || "Something went wrong",
-        };
-    }
-
-}
-```
-
-- lib -> jwtHandlers.ts
-
-```ts
-/* eslint-disable @typescript-eslint/no-explicit-any */
-"use server";
-
-import jwt from "jsonwebtoken";
-
-export const verifyAccessToken = async (token: string) => {
-    try {
-        const verifiedAccessToken = jwt.verify(
-            token,
-            process.env.JWT_SECRET!
-        ) as jwt.JwtPayload;
-
-        return {
-            success: true,
-            message: "Token is valid",
-            payload: verifiedAccessToken,
-        };
-    } catch (error: any) {
-        return {
-            success: false,
-            message: error?.message || "Invalid token",
-        };
-    }
-};
-
-```
-
-- proxy.ts
-
-```ts
-import jwt, { JwtPayload } from 'jsonwebtoken';
-import type { NextRequest } from 'next/server';
-import { NextResponse } from 'next/server';
-import { getDefaultDashboardRoute, getRouteOwner, isAuthRoute, UserRole } from './lib/auth-utils';
-import { getUserInfo } from './services/auth/getUserInfo';
-import { deleteCookie, getCookie } from './services/auth/tokenHandlers';
-import { getNewAccessToken } from './services/auth/auth.service';
-
-
-
-// This function can be marked `async` if using `await` inside
-export async function proxy(request: NextRequest) {
-    const pathname = request.nextUrl.pathname;
-    const hasTokenRefreshedParam = request.nextUrl.searchParams.has('tokenRefreshed');
-
-    // If coming back after token refresh, remove the param and continue
-    if (hasTokenRefreshedParam) {
-        const url = request.nextUrl.clone();
-        url.searchParams.delete('tokenRefreshed');
-        return NextResponse.redirect(url);
-    }
-
-    const tokenRefreshResult = await getNewAccessToken();
-
-    // If token was refreshed, redirect to same page to fetch with new token
-    if (tokenRefreshResult?.tokenRefreshed) {
-        const url = request.nextUrl.clone(); // as we are in server action we can not directly redirect we have to clone and then redirect 
-        url.searchParams.set('tokenRefreshed', 'true');
-        return NextResponse.redirect(url);
-    }
-
-    // const accessToken = request.cookies.get("accessToken")?.value || null;
-
-    const accessToken = await getCookie("accessToken") || null;
-
-    let userRole: UserRole | null = null;
-    if (accessToken) {
-        const verifiedToken: JwtPayload | string = jwt.verify(accessToken, process.env.JWT_SECRET as string);
-
-        if (typeof verifiedToken === "string") {
-            await deleteCookie("accessToken");
-            await deleteCookie("refreshToken");
-            return NextResponse.redirect(new URL('/login', request.url));
-        }
-
-        userRole = verifiedToken.role;
-    }
-
-    const routerOwner = getRouteOwner(pathname);
-    //path = /doctor/appointments => "DOCTOR"
-    //path = /my-profile => "COMMON"
-    //path = /login => null
-
-    const isAuth = isAuthRoute(pathname)
-
-    // Rule 1 : User is logged in and trying to access auth route. Redirect to default dashboard
-    if (accessToken && isAuth) {
-        return NextResponse.redirect(new URL(getDefaultDashboardRoute(userRole as UserRole), request.url))
-    }
-
-
-    // Rule 2 : User is trying to access open public route
-    if (routerOwner === null) {
-        return NextResponse.next();
-    }
-
-    // Rule 1 & 2 for open public routes and auth routes
-
-    if (!accessToken) {
-        const loginUrl = new URL("/login", request.url);
-        loginUrl.searchParams.set("redirect", pathname);
-        return NextResponse.redirect(loginUrl);
-    }
-
-    // Rule 3 : User need password change
-
-    if (accessToken) {
-        const userInfo = await getUserInfo();
-        if (userInfo.needPasswordChange) {
-            if (pathname !== "/reset-password") {
-                const resetPasswordUrl = new URL("/reset-password", request.url);
-                resetPasswordUrl.searchParams.set("redirect", pathname);
-                return NextResponse.redirect(resetPasswordUrl);
-            }
-            return NextResponse.next();
-        }
-
-        if (userInfo && !userInfo.needPasswordChange && pathname === '/reset-password') {
-            return NextResponse.redirect(new URL(getDefaultDashboardRoute(userRole as UserRole), request.url));
-        }
-    }
-
-    // Rule 4 : User is trying to access common protected route
-    if (routerOwner === "COMMON") {
-        return NextResponse.next();
-    }
-
-    // Rule 5 : User is trying to access role based protected route
-    if (routerOwner === "ADMIN" || routerOwner === "DOCTOR" || routerOwner === "PATIENT") {
-        if (userRole !== routerOwner) {
-            return NextResponse.redirect(new URL(getDefaultDashboardRoute(userRole as UserRole), request.url))
-        }
-    }
-
-    return NextResponse.next();
-}
-
-
-
-export const config = {
-    matcher: [
-        /*
-         * Match all request paths except for the ones starting with:
-         * - api (API routes)
-         * - _next/static (static files)
-         * - _next/image (image optimization files)
-         * - favicon.ico, sitemap.xml, robots.txt (metadata files)
-         */
-        '/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.well-known).*)',
-    ],
-}
-```
-
-## 72-7 Implementing Refresh Token In Server Fetch Function
-
-- for checking access token in server fetch 
-
-```ts
-import { getNewAccessToken } from "@/services/auth/auth.service";
-import { getCookie } from "@/services/auth/tokenHandlers";
-
-
-const BACKEND_API_URL = process.env.NEXT_PUBLIC_BASE_API_URL || "http://localhost:5000/api/v1";
-
-// /auth/login
-const serverFetchHelper = async (endpoint: string, options: RequestInit): Promise<Response> => {
-    const { headers, ...restOptions } = options;
-    const accessToken = await getCookie("accessToken");
-
-    //to stop recursion loop
-    if (endpoint !== "/auth/refresh-token") {
-        await getNewAccessToken();
-    }
-
-    const response = await fetch(`${BACKEND_API_URL}${endpoint}`, {
-        headers: {
-            Cookie: accessToken ? `accessToken=${accessToken}` : "",
-            ...headers,
-            // ...(accessToken ? { "Authorization": `Bearer ${accessToken}` } : {}),
-            // ...(accessToken ? { "Authorization": accessToken } : {}),
-
-        },
-        ...restOptions,
-    })
-
-    return response;
-}
-
-export const serverFetch = {
-    get: async (endpoint: string, options: RequestInit = {}): Promise<Response> => serverFetchHelper(endpoint, { ...options, method: "GET" }),
-
-    post: async (endpoint: string, options: RequestInit = {}): Promise<Response> => serverFetchHelper(endpoint, { ...options, method: "POST" }),
-
-    put: async (endpoint: string, options: RequestInit = {}): Promise<Response> => serverFetchHelper(endpoint, { ...options, method: "PUT" }),
-
-    patch: async (endpoint: string, options: RequestInit = {}): Promise<Response> => serverFetchHelper(endpoint, { ...options, method: "PATCH" }),
-
-    delete: async (endpoint: string, options: RequestInit = {}): Promise<Response> => serverFetchHelper(endpoint, { ...options, method: "DELETE" }),
-
-}
-
-/**
- * 
- * serverFetch.get("/auth/me")
- * serverFetch.post("/auth/login", { body: JSON.stringify({}) })
- */
-```
-
-
-## 72-8 Creating Server Actions And Components For Doctors Schedule
-
-- services -> doctor -> doctorSchedule.services.ts
-
-```ts
-"use server"
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { serverFetch } from "@/lib/server-fetch";
-
-export async function getDoctorOwnSchedules(queryString?: string) {
-    try {
-        // const response = await serverFetch.get(`/doctor-schedule/my-schedule${queryString ? `?${queryString}` : ""}`);
-        const response = await serverFetch.get(`/doctor-schedule${queryString ? `?${queryString}` : ""}`);
-        const result = await response.json();
-        return {
-            success: result.success,
-            data: Array.isArray(result.data) ? result.data : [],
-            meta: result.meta,
-        };
-    } catch (error: any) {
-        console.log(error);
+        console.error("Error fetching appointments:", error);
         return {
             success: false,
             data: [],
-            message: `${process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'}`
+            message:
+                process.env.NODE_ENV === "development"
+                    ? error.message
+                    : "Failed to fetch appointments",
         };
     }
 }
 
-export async function getAvailableSchedules() {
+export async function getAppointmentById(appointmentId: string) {
     try {
-        const response = await serverFetch.get(`/schedule`);
+        const response = await serverFetch.get('/appointment/my-appointment');
+        const result = await response.json();
+
+        if (result.success && result.data) {
+            // Find the appointment by ID from the list
+            const appointment = result.data.find((apt: any) => apt.id === appointmentId);
+
+            if (appointment) {
+                return {
+                    success: true,
+                    data: appointment,
+                };
+            } else {
+                return {
+                    success: false,
+                    data: null,
+                    message: "Appointment not found",
+                };
+            }
+        }
+
+        return {
+            success: false,
+            data: null,
+            message: result.message || "Failed to fetch appointment",
+        };
+    } catch (error: any) {
+        console.error("Error fetching appointment:", error);
+        return {
+            success: false,
+            data: null,
+            message:
+                process.env.NODE_ENV === "development"
+                    ? error.message
+                    : "Failed to fetch appointment",
+        };
+    }
+}
+
+export async function changeAppointmentStatus(
+    appointmentId: string,
+    status: string
+) {
+    try {
+        const response = await serverFetch.patch(
+            `/appointment/status/${appointmentId}`,
+            {
+                body: JSON.stringify({ status }),
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            }
+        );
+
         const result = await response.json();
         return result;
     } catch (error: any) {
-        console.log(error);
+        console.error("Error changing appointment status:", error);
         return {
             success: false,
-            message: `${process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'}`
+            message:
+                process.env.NODE_ENV === "development"
+                    ? error.message
+                    : "Failed to change appointment status",
         };
     }
 }
 
-export async function createDoctorSchedule(scheduleIds: string[]) {
+```
+
+- src\services\patient\prescription.service.ts
+
+```ts 
+"use server"
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { serverFetch } from "@/lib/server-fetch";
+import { IPrescriptionFormData } from "@/types/prescription.interface";
+
+export async function createPrescription(data: IPrescriptionFormData) {
     try {
-        const response = await serverFetch.post(`/doctor-schedule`, {
-            body: JSON.stringify({ scheduleIds }),
+        const response = await serverFetch.post("/prescription", {
+            body: JSON.stringify(data),
             headers: {
                 "Content-Type": "application/json",
             },
@@ -1874,1793 +252,66 @@ export async function createDoctorSchedule(scheduleIds: string[]) {
         const result = await response.json();
         return result;
     } catch (error: any) {
-        console.log(error);
+        console.error("Error creating prescription:", error);
         return {
             success: false,
-            message: `${process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'}`
+            message:
+                process.env.NODE_ENV === "development"
+                    ? error.message
+                    : "Failed to create prescription",
         };
     }
 }
 
-export async function deleteDoctorOwnSchedule(scheduleId: string) {
+export async function getMyPrescriptions(queryString?: string) {
     try {
-        const response = await serverFetch.delete(`/doctor-schedule/${scheduleId}`);
+        const response = await serverFetch.get(
+            `/prescription/my-prescription${queryString ? `?${queryString}` : ""}`
+        );
         const result = await response.json();
-
-        return {
-            success: result.success,
-            message: result.message || "Schedule removed successfully",
-        };
+        return result;
     } catch (error: any) {
-        console.error("Delete schedule error:", error);
+        console.error("Error fetching prescriptions:", error);
         return {
             success: false,
-            message: error.message || "Failed to remove schedule",
+            data: [],
+            message:
+                process.env.NODE_ENV === "development"
+                    ? error.message
+                    : "Failed to fetch prescriptions",
         };
     }
 }
-```
 
-- components -> doctor -> BookScheduleDialog.tsx
-
-```tsx 
-"use client";
-
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import {
-  createDoctorSchedule,
-  getAvailableSchedules,
-} from "@/services/doctor/doctorScedule.services";
-import { ISchedule } from "@/types/schedule.interface";
-import { format } from "date-fns";
-import { Calendar } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
-
-interface BookScheduleDialogProps {
-  open: boolean;
-  onClose: () => void;
-  onSuccess?: () => void;
-  availableSchedules: ISchedule[];
-}
-
-export default function BookScheduleDialog({
-  open,
-  onClose,
-  onSuccess,
-  availableSchedules: initialAvailableSchedules = [],
-}: BookScheduleDialogProps) {
-  const [availableSchedules, setAvailableSchedules] = useState<ISchedule[]>(
-    initialAvailableSchedules
-  );
-  const [selectedSchedules, setSelectedSchedules] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [loadingSchedules, setLoadingSchedules] = useState(false);
-  const router = useRouter();
-
-  useEffect(() => {
-    if (open) {
-      loadAvailableSchedules();
-    } else {
-      setSelectedSchedules([]);
-    }
-  }, [open]);
-
-  const loadAvailableSchedules = async () => {
+export async function getAllPrescriptions(queryString?: string) {
     try {
-      setLoadingSchedules(true);
-      const response = await getAvailableSchedules();
-      console.log("response:", response);
-      setAvailableSchedules(response?.data || []);
-    } catch (error) {
-      console.error("Error loading schedules:", error);
-      toast.error("Failed to load available schedules");
-    } finally {
-      setLoadingSchedules(false);
+        const response = await serverFetch.get(
+            `/prescription${queryString ? `?${queryString}` : ""}`
+        );
+        const result = await response.json();
+        return result;
+    } catch (error: any) {
+        console.error("Error fetching prescriptions:", error);
+        return {
+            success: false,
+            data: [],
+            message:
+                process.env.NODE_ENV === "development"
+                    ? error.message
+                    : "Failed to fetch prescriptions",
+        };
     }
-  };
-
-  const handleToggleSchedule = (scheduleId: string) => {
-    setSelectedSchedules((prev) =>
-      prev.includes(scheduleId)
-        ? prev.filter((id) => id !== scheduleId)
-        : [...prev, scheduleId]
-    );
-  };
-
-  const handleSubmit = async () => {
-    if (selectedSchedules.length === 0) {
-      toast.error("Please select at least one schedule");
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      await createDoctorSchedule(selectedSchedules);
-      toast.success(
-        `Successfully booked ${selectedSchedules.length} schedule${
-          selectedSchedules.length > 1 ? "s" : ""
-        }`
-      );
-      if (onSuccess) {
-        onSuccess();
-      } else {
-        router.refresh();
-      }
-      onClose();
-    } catch (error) {
-      console.error("Error booking schedules:", error);
-      toast.error("Failed to book schedules");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const groupSchedulesByDate = () => {
-    const grouped: Record<string, ISchedule[]> = {};
-
-    if (availableSchedules.length > 0) {
-      availableSchedules.forEach((schedule) => {
-        const date = format(new Date(schedule.startDateTime), "yyyy-MM-dd");
-        if (!grouped[date]) {
-          grouped[date] = [];
-        }
-        grouped[date].push(schedule);
-      });
-    }
-
-    return Object.entries(grouped).sort(
-      ([dateA], [dateB]) =>
-        new Date(dateA).getTime() - new Date(dateB).getTime()
-    );
-  };
-
-  const groupedSchedules = groupSchedulesByDate();
-
-  console.log({ availableSchedules, groupedSchedules });
-
-  return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Book Schedules</DialogTitle>
-          <DialogDescription>
-            Select time slots from available schedules to add to your calendar
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="py-4">
-          {loadingSchedules ? (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">Loading schedules...</p>
-            </div>
-          ) : availableSchedules.length === 0 ? (
-            <div className="text-center py-8">
-              <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-              <p className="text-muted-foreground">
-                No available schedules found
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {groupedSchedules.map(([date, daySchedules]) => (
-                <div key={date}>
-                  <h3 className="font-medium mb-3">
-                    {format(new Date(date), "EEEE, MMMM d, yyyy")}
-                  </h3>
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    {daySchedules.map((schedule) => (
-                      <div
-                        key={schedule.id}
-                        className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-accent cursor-pointer"
-                        onClick={() => handleToggleSchedule(schedule.id)}
-                      >
-                        <Checkbox
-                          id={schedule.id}
-                          checked={selectedSchedules.includes(schedule.id)}
-                          onCheckedChange={() =>
-                            handleToggleSchedule(schedule.id)
-                          }
-                        />
-                        <Label
-                          htmlFor={schedule.id}
-                          className="flex-1 cursor-pointer"
-                        >
-                          {format(new Date(schedule.startDateTime), "h:mm a")} -{" "}
-                          {format(new Date(schedule.endDateTime), "h:mm a")}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <DialogFooter>
-          <div className="flex items-center justify-between w-full">
-            <p className="text-sm text-muted-foreground">
-              {selectedSchedules.length} schedule
-              {selectedSchedules.length !== 1 ? "s" : ""} selected
-            </p>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={onClose} disabled={isLoading}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSubmit}
-                disabled={selectedSchedules.length === 0 || isLoading}
-              >
-                {isLoading ? "Booking..." : "Book Schedules"}
-              </Button>
-            </div>
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
 }
-
-```
-
-- components -> doctor -> myScheduleColumns.tsx
-
-```tsx
-"use client";
-
-import { Column } from "@/components/shared/ManagementTable";
-import { Badge } from "@/components/ui/badge";
-import { IDoctorSchedule } from "@/types/schedule.interface";
-import { format, isBefore, startOfDay } from "date-fns";
-
-const isPastSchedule = (schedule: IDoctorSchedule) => {
-  return isBefore(
-    new Date(schedule.schedule?.startDateTime || ""),
-    startOfDay(new Date())
-  );
-};
-
-export const myScheduleColumns: Column<IDoctorSchedule>[] = [
-  {
-    header: "Date",
-    accessor: (schedule) => (
-      <span className="font-medium">
-        {schedule.schedule?.startDateTime &&
-          format(new Date(schedule.schedule.startDateTime), "MMM d, yyyy")}
-      </span>
-    ),
-    sortKey: "schedule.startDateTime",
-  },
-  {
-    header: "Time Slot",
-    accessor: (schedule) => (
-      <div className="flex items-center gap-2">
-        <span className="text-sm">
-          {schedule.schedule?.startDateTime &&
-            format(new Date(schedule.schedule.startDateTime), "h:mm a")}{" "}
-          -{" "}
-          {schedule.schedule?.endDateTime &&
-            format(new Date(schedule.schedule.endDateTime), "h:mm a")}
-        </span>
-      </div>
-    ),
-  },
-  {
-    header: "Status",
-    accessor: (schedule) => {
-      const isPast = isPastSchedule(schedule);
-      return isPast ? (
-        <Badge variant="secondary">Past</Badge>
-      ) : (
-        <Badge variant="outline" className="bg-green-50 text-green-700">
-          Upcoming
-        </Badge>
-      );
-    },
-  },
-  {
-    header: "Booking Status",
-    accessor: (schedule) =>
-      schedule.isBooked ? (
-        <Badge variant="default" className="bg-blue-600">
-          Booked
-        </Badge>
-      ) : (
-        <Badge variant="outline">Available</Badge>
-      ),
-  },
-];
-
-```
-- components -> doctor -> MyScheduleFilters.tsx
-
-```tsx
-"use client";
-
-import ClearFiltersButton from "@/components/shared/ClearFiltersButton";
-import RefreshButton from "@/components/shared/RefreshButton";
-import SelectFilter from "@/components/shared/SelectFilter";
-
-const MySchedulesFilters = () => {
-  return (
-    <div className="space-y-3">
-      {/* Row 1: Refresh Button */}
-      <div className="flex items-center gap-3">
-        <RefreshButton />
-      </div>
-
-      {/* Row 2: Filter Controls */}
-      <div className="flex items-center gap-3 flex-wrap">
-        {/* Booking Status Filter */}
-        <SelectFilter
-          paramName="isBooked"
-          placeholder="Booking Status"
-          defaultValue="All Schedules"
-          options={[
-            { label: "Available", value: "false" },
-            { label: "Booked", value: "true" },
-          ]}
-        />
-
-        {/* Clear All Filters */}
-        <ClearFiltersButton />
-      </div>
-    </div>
-  );
-};
-
-export default MySchedulesFilters;
-
-```
-- components -> doctor -> MyScheduleHeader.tsx
-
-```tsx
-/* eslint-disable @typescript-eslint/no-explicit-any */
-"use client";
-
-import ManagementPageHeader from "@/components/shared/ManagementPageHeader";
-import { Plus } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import BookScheduleDialog from "./BookScheduleDialog";
-
-interface MySchedulesHeaderProps {
-  availableSchedules: any[];
-}
-
-const MySchedulesHeader = ({ availableSchedules }: MySchedulesHeaderProps) => {
-  const router = useRouter();
-  const [, startTransition] = useTransition();
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-
-  const handleSuccess = () => {
-    setIsDialogOpen(false);
-    startTransition(() => {
-      router.refresh();
-    });
-  };
-
-  const handleOpenDialog = () => {
-    setIsDialogOpen(true);
-  };
-
-  const handleCloseDialog = () => {
-    setIsDialogOpen(false);
-  };
-
-  return (
-    <>
-      <BookScheduleDialog
-        open={isDialogOpen}
-        onClose={handleCloseDialog}
-        onSuccess={handleSuccess}
-        availableSchedules={availableSchedules}
-      />
-
-      <ManagementPageHeader
-        title="My Schedules"
-        description="Manage your availability and time slots for patient consultations"
-        action={{
-          label: "Book Schedule",
-          icon: Plus,
-          onClick: handleOpenDialog,
-        }}
-      />
-    </>
-  );
-};
-
-export default MySchedulesHeader;
-
-```
-- components -> doctor -> MyScheduleTable.tsx
-
-```tsx
-"use client";
-
-import DeleteConfirmationDialog from "@/components/shared/DeleteConfirmationDialog";
-import ManagementTable from "@/components/shared/ManagementTable";
-import { deleteDoctorOwnSchedule } from "@/services/doctor/doctorScedule.services";
-import { IDoctorSchedule } from "@/types/schedule.interface";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
-import { myScheduleColumns } from "./myScheduleColumns";
-
-interface MySchedulesTableProps {
-  schedules: IDoctorSchedule[];
-}
-
-export default function MySchedulesTable({
-  schedules = [],
-}: MySchedulesTableProps) {
-  const router = useRouter();
-  const [, startTransition] = useTransition();
-  const [deletingSchedule, setDeletingSchedule] =
-    useState<IDoctorSchedule | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  const handleRefresh = () => {
-    startTransition(() => {
-      router.refresh();
-    });
-  };
-
-  const handleDelete = (schedule: IDoctorSchedule) => {
-    // Only allow deletion of unbooked schedules
-    if (!schedule.isBooked) {
-      setDeletingSchedule(schedule);
-    } else {
-      toast.error("Cannot delete booked schedule");
-    }
-  };
-
-  const confirmDelete = async () => {
-    if (!deletingSchedule) return;
-
-    setIsDeleting(true);
-    const result = await deleteDoctorOwnSchedule(deletingSchedule.scheduleId);
-    setIsDeleting(false);
-
-    if (result.success) {
-      toast.success(result.message || "Schedule deleted successfully");
-      setDeletingSchedule(null);
-      handleRefresh();
-    } else {
-      toast.error(result.message || "Failed to delete schedule");
-    }
-  };
-
-  return (
-    <>
-      <ManagementTable
-        data={schedules}
-        columns={myScheduleColumns}
-        onDelete={handleDelete}
-        getRowKey={(schedule) => schedule.scheduleId}
-        emptyMessage="No schedules found. Try adjusting your filters or book new schedules."
-      />
-
-      {/* Delete Confirmation Dialog */}
-      <DeleteConfirmationDialog
-        open={!!deletingSchedule}
-        onOpenChange={(open) => !open && setDeletingSchedule(null)}
-        onConfirm={confirmDelete}
-        title="Delete Schedule"
-        description="Are you sure you want to delete this schedule slot? This action cannot be undone."
-        isDeleting={isDeleting}
-      />
-    </>
-  );
-}
-
-```
-
-
-## 72-9 Completing Doctor Schedule Page For Doctor Role
-
-- app ->(dashboardLayout) doctor -> my-schedules -> page.tsx
-
-```tsx
-import MySchedulesFilters from "@/components/modules/Doctor/MyScheduleFilters";
-import MySchedulesHeader from "@/components/modules/Doctor/MyScheduleHeader";
-import MySchedulesTable from "@/components/modules/Doctor/MyScheduleTable";
-import TablePagination from "@/components/shared/TablePagination";
-import { TableSkeleton } from "@/components/shared/TableSkeleton";
-import { queryStringFormatter } from "@/lib/formatters";
-import {
-  getAvailableSchedules,
-  getDoctorOwnSchedules,
-} from "@/services/doctor/doctorScedule.services";
-import { Suspense } from "react";
-
-interface DoctorMySchedulesPageProps {
-  searchParams: Promise<{
-    page?: string;
-    limit?: string;
-    isBooked?: string;
-  }>;
-}
-
-const DoctorMySchedulesPage = async ({
-  searchParams,
-}: DoctorMySchedulesPageProps) => {
-  const params = await searchParams;
-
-  const queryString = queryStringFormatter(params);
-  const myDoctorsScheduleResponse = await getDoctorOwnSchedules(queryString);
-  const availableSchedulesResponse = await getAvailableSchedules();
-
-  console.log({
-    myDoctorsScheduleResponse,
-    availableSchedulesResponse,
-  });
-
-  const schedules = myDoctorsScheduleResponse?.data || [];
-  const meta = myDoctorsScheduleResponse?.meta;
-  const totalPages = Math.ceil((meta?.total || 1) / (meta?.limit || 1));
-
-  return (
-    <div className="space-y-6">
-      <MySchedulesHeader
-        availableSchedules={availableSchedulesResponse?.data || []}
-      />
-
-      <MySchedulesFilters />
-
-      <Suspense fallback={<TableSkeleton columns={5} rows={10} />}>
-        <MySchedulesTable schedules={schedules} />
-        <TablePagination
-          currentPage={meta?.page || 1}
-          totalPages={totalPages || 1}
-        />
-      </Suspense>
-    </div>
-  );
-};
-
-export default DoctorMySchedulesPage;
-
-```
-
-## 72-10 Creating Components For Consultation Page And AI Suggestion
-
-- (commonLayout) -> consultation -> page.tsx 
-
-```tsx 
-import AIDoctorSuggestion from "@/components/modules/Consultation/AIDoctorSuggestion";
-import DoctorGrid from "@/components/modules/Consultation/DoctorGrid";
-import DoctorSearchFilters from "@/components/modules/Consultation/DoctorSearchFilter";
-import TablePagination from "@/components/shared/TablePagination";
-import { TableSkeleton } from "@/components/shared/TableSkeleton";
-import { queryStringFormatter } from "@/lib/formatters";
-import { getDoctors } from "@/services/admin/doctorManagement";
-import { getSpecialities } from "@/services/admin/specialitiesManagement";
-import { Suspense } from "react";
-
-// ISR: Revalidate every 10 minutes for doctor listings
-export const revalidate = 600;
-
-const ConsultationPage = async ({
-  searchParams,
-}: {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
-}) => {
-  const searchParamsObj = await searchParams;
-  const queryString = queryStringFormatter(searchParamsObj);
-
-  // Fetch doctors and specialties in parallel
-  const [doctorsResponse, specialtiesResponse] = await Promise.all([
-    getDoctors(queryString),
-    getSpecialities(),
-  ]);
-
-  const doctors = doctorsResponse?.data || [];
-  const specialties = specialtiesResponse?.data || [];
-
-  return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Find a Doctor</h1>
-          <p className="text-muted-foreground mt-2">
-            Search and book appointments with our qualified healthcare
-            professionals
-          </p>
-        </div>
-
-        {/* AI Doctor Suggestion */}
-        <AIDoctorSuggestion />
-
-        {/* Filters */}
-        <DoctorSearchFilters specialties={specialties} />
-
-        {/* Doctor Grid */}
-        <Suspense fallback={<TableSkeleton columns={3} />}>
-          <DoctorGrid doctors={doctors} />
-        </Suspense>
-
-        {/* Pagination */}
-        <TablePagination
-          currentPage={doctorsResponse?.meta?.page || 1}
-          totalPages={doctorsResponse?.meta?.totalPage || 1}
-        />
-      </div>
-    </div>
-  );
-};
-
-export default ConsultationPage;
-
-```
-
-- src\components\modules\Consultation\BookAppointmentDialog.tsx
-
-```tsx
-"use client";
-
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { IDoctor } from "@/types/doctor.interface";
-import { IDoctorSchedule } from "@/types/schedule.interface";
-import { format } from "date-fns";
-import { Calendar, Clock } from "lucide-react";
-import { useState } from "react";
-
-interface BookAppointmentDialogProps {
-  doctor: IDoctor;
-  isOpen: boolean;
-  onClose: () => void;
-}
-
-export default function BookAppointmentDialog({
-  doctor,
-  isOpen,
-  onClose,
-}: BookAppointmentDialogProps) {
-  const doctorSchedules = doctor.doctorSchedules || [];
-  const [selectedSchedule, setSelectedSchedule] =
-    useState<IDoctorSchedule | null>(null);
-
-  const handleCloseModal = () => {
-    setSelectedSchedule(null);
-    onClose();
-  };
-
-  const groupSchedulesByDate = () => {
-    const grouped: Record<string, IDoctorSchedule[]> = {};
-
-    doctorSchedules.forEach((schedule) => {
-      if (!schedule.schedule?.startDateTime) return;
-
-      const startDate = new Date(schedule.schedule.startDateTime)
-        .toISOString()
-        .split("T")[0];
-
-      if (startDate) {
-        if (!grouped[startDate]) {
-          grouped[startDate] = [];
-        }
-        grouped[startDate].push(schedule);
-      }
-    });
-
-    return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
-  };
-
-  const groupedSchedules = groupSchedulesByDate();
-
-  // Check if we have schedules but no schedule data (API issue)
-  const hasSchedulesWithoutData =
-    doctorSchedules.length > 0 && groupedSchedules.length === 0;
-
-  return (
-    <Dialog open={isOpen} onOpenChange={handleCloseModal}>
-      <DialogContent className="max-w-2xl max-h-[80vh]">
-        <>
-          <DialogHeader>
-            <DialogTitle>Book Appointment with Dr. {doctor.name}</DialogTitle>
-            <DialogDescription>
-              Select an available time slot for your consultation
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            {/* Doctor Info */}
-            <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
-              <div>
-                <p className="font-medium">{doctor.designation}</p>
-                <p className="text-sm text-muted-foreground">
-                  Consultation Fee: ${doctor.appointmentFee}
-                </p>
-              </div>
-            </div>
-
-            {/* Schedules */}
-            {hasSchedulesWithoutData ? (
-              <div className="text-center py-12">
-                <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-                <p className="text-muted-foreground">
-                  Schedule data not available
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  The doctor has {doctorSchedules.length} schedule
-                  {doctorSchedules.length !== 1 ? "s" : ""}, but detailed
-                  information is not loaded.
-                </p>
-              </div>
-            ) : groupedSchedules.length === 0 ? (
-              <div className="text-center py-12">
-                <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-                <p className="text-muted-foreground">
-                  No available slots at the moment
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Please check back later
-                </p>
-              </div>
-            ) : (
-              <ScrollArea className="h-[300px] pr-4">
-                <div className="space-y-4">
-                  {groupedSchedules.map(([date, dateSchedules]) => (
-                    <div key={date}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <h4 className="font-medium">
-                          {format(new Date(date), "EEEE, MMMM d, yyyy")}
-                        </h4>
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {dateSchedules.map((schedule) => {
-                          const startTime = schedule.schedule?.startDateTime
-                            ? new Date(schedule.schedule.startDateTime)
-                            : null;
-
-                          return (
-                            <Button
-                              key={schedule.scheduleId}
-                              variant={
-                                selectedSchedule?.scheduleId ===
-                                schedule.scheduleId
-                                  ? "default"
-                                  : "outline"
-                              }
-                              className="justify-start h-auto py-2"
-                              onClick={() => setSelectedSchedule(schedule)}
-                            >
-                              <Clock className="h-4 w-4 mr-2" />
-                              <span className="text-sm">
-                                {startTime
-                                  ? format(startTime, "h:mm a")
-                                  : "N/A"}
-                              </span>
-                            </Button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button onClick={handleCloseModal}>Close</Button>
-          </DialogFooter>
-        </>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-```
-- src\components\modules\Consultation\DoctorCard.tsx
-
-```tsx
-"use client";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { getInitials } from "@/lib/formatters";
-import { IDoctor } from "@/types/doctor.interface";
-import { Clock, DollarSign, Eye, MapPin, Star } from "lucide-react";
-import Link from "next/link";
-import { useState } from "react";
-import BookAppointmentDialog from "./BookAppointmentDialog";
-
-interface DoctorCard {
-  doctor: IDoctor;
-}
-
-export default function DoctorCard({ doctor }: DoctorCard) {
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
-
-  return (
-    <>
-      <Card className="overflow-hidden hover:shadow-lg transition-shadow">
-        <CardHeader className="pb-3">
-          <div className="flex items-start gap-4">
-            <Avatar className="h-16 w-16">
-              <AvatarImage src={doctor.profilePhoto || ""} alt={doctor.name} />
-              <AvatarFallback className="text-lg">
-                {getInitials(doctor.name)}
-              </AvatarFallback>
-            </Avatar>
-
-            <div className="flex-1 min-w-0">
-              <CardTitle className="text-lg line-clamp-1">
-                Dr. {doctor.name}
-              </CardTitle>
-              <CardDescription className="line-clamp-1">
-                {doctor.designation}
-              </CardDescription>
-
-              <div className="flex items-center gap-2 mt-2">
-                <div className="flex items-center gap-1">
-                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                  <span className="text-sm font-medium">
-                    {doctor.averageRating?.toFixed(1) || "N/A"}
-                  </span>
-                </div>
-                {doctor.doctorSpecialties &&
-                  doctor.doctorSpecialties.length > 0 && (
-                    <Badge variant="secondary" className="text-xs">
-                      {doctor.doctorSpecialties[0].specialties?.title}
-                    </Badge>
-                  )}
-              </div>
-            </div>
-          </div>
-        </CardHeader>
-
-        <CardContent className="space-y-3 pb-3">
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Clock className="h-4 w-4 shrink-0" />
-              <span className="truncate">{doctor.experience} years exp</span>
-            </div>
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <DollarSign className="h-4 w-4 shrink-0" />
-              <span className="font-semibold text-foreground">
-                ${doctor.appointmentFee}
-              </span>
-            </div>
-          </div>
-
-          {doctor.currentWorkingPlace && (
-            <div className="flex items-start gap-2 text-sm text-muted-foreground">
-              <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
-              <span className="line-clamp-1">{doctor.currentWorkingPlace}</span>
-            </div>
-          )}
-
-          <div className="text-sm">
-            <p className="font-medium mb-1">Qualification:</p>
-            <p className="text-muted-foreground line-clamp-2">
-              {doctor.qualification}
-            </p>
-          </div>
-
-          {doctor.doctorSpecialties && doctor.doctorSpecialties.length > 1 && (
-            <div className="flex flex-wrap gap-1">
-              {doctor.doctorSpecialties.slice(1, 3).map((specialty) => (
-                <Badge
-                  key={specialty.specialitiesId}
-                  variant="outline"
-                  className="text-xs"
-                >
-                  {specialty.specialties?.title}
-                </Badge>
-              ))}
-              {doctor.doctorSpecialties.length > 3 && (
-                <Badge variant="outline" className="text-xs">
-                  +{doctor.doctorSpecialties.length - 3} more
-                </Badge>
-              )}
-            </div>
-          )}
-        </CardContent>
-
-        <CardFooter className="pt-3 border-t flex gap-2">
-          <Link className="flex-1" href={`/consultation/doctor/${doctor.id}`}>
-            <Button variant="outline" className="w-full">
-              <Eye className="h-4 w-4 mr-2" />
-              View Details
-            </Button>
-          </Link>
-          <Button onClick={() => setShowScheduleModal(true)} className="flex-1">
-            Book Appointment
-          </Button>
-        </CardFooter>
-      </Card>
-
-      <BookAppointmentDialog
-        doctor={doctor}
-        isOpen={showScheduleModal}
-        onClose={() => setShowScheduleModal(false)}
-      />
-    </>
-  );
-}
-
-```
-- src\components\modules\Consultation\DoctorGrid.tsx
-
-```tsx
-import { IDoctor } from "@/types/doctor.interface";
-import DoctorCard from "./DoctorCard";
-
-interface DoctorGridProps {
-  doctors: IDoctor[];
-}
-
-export default function DoctorGrid({ doctors }: DoctorGridProps) {
-  if (doctors.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-muted-foreground text-lg">
-          No doctors found matching your criteria.
-        </p>
-        <p className="text-sm text-muted-foreground mt-2">
-          Try adjusting your filters or search terms.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {doctors.map((doctor) => (
-        <DoctorCard key={doctor.id} doctor={doctor} />
-      ))}
-    </div>
-  );
-}
-
-```
-- src\components\modules\Consultation\DoctorSearchFilter.tsx
-
-```tsx
-"use client";
-
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useDebounce } from "@/hooks/useDebounce";
-import { Search } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
-
-interface DoctorSearchFiltersProps {
-  specialties: Array<{ id: string; title: string }>;
-}
-
-export default function DoctorSearchFilters({
-  specialties,
-}: DoctorSearchFiltersProps) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
-  // Initialize state once from URL, but don't re-sync on every searchParams change
-  const [searchTerm, setSearchTerm] = useState(() => {
-    if (typeof window !== "undefined") {
-      return (
-        new URLSearchParams(window.location.search).get("searchTerm") || ""
-      );
-    }
-    return "";
-  });
-
-  const debouncedSearch = useDebounce(searchTerm, 500);
-
-  const updateFilters = useCallback(
-    (key: string, value: string) => {
-      const params = new URLSearchParams(window.location.search);
-
-      if (value && value !== "all") {
-        params.set(key, value);
-      } else {
-        params.delete(key);
-      }
-
-      // Reset to page 1 when filters change
-      params.delete("page");
-
-      router.push(`/consultation?${params.toString()}`);
-    },
-    [router]
-  );
-
-  // Trigger search when debounced value changes
-  useEffect(() => {
-    const urlSearchTerm =
-      new URLSearchParams(window.location.search).get("searchTerm") || "";
-    if (debouncedSearch !== urlSearchTerm) {
-      updateFilters("searchTerm", debouncedSearch);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch]);
-
-  const handleClearFilters = () => {
-    setSearchTerm("");
-    router.push("/consultation");
-  };
-
-  const hasActiveFilters =
-    searchParams.get("searchTerm") || searchParams.get("specialties");
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-col md:flex-row gap-4">
-        {/* Search Input */}
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search doctors by name..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-
-        {/* Specialty Filter */}
-        <Select
-          value={searchParams.get("specialties") || "all"}
-          onValueChange={(value) => updateFilters("specialties", value)}
-        >
-          <SelectTrigger className="w-full md:w-[250px]">
-            <SelectValue placeholder="Select Specialty" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Specialties</SelectItem>
-            {specialties.map((specialty) => (
-              <SelectItem key={specialty.id} value={specialty.title}>
-                {specialty.title}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {/* Gender Filter */}
-        <Select
-          value={searchParams.get("gender") || "all"}
-          onValueChange={(value) => updateFilters("gender", value)}
-        >
-          <SelectTrigger className="w-full md:w-[180px]">
-            <SelectValue placeholder="Gender" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Genders</SelectItem>
-            <SelectItem value="MALE">Male</SelectItem>
-            <SelectItem value="FEMALE">Female</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* Clear Filters */}
-        {hasActiveFilters && (
-          <Button
-            variant="outline"
-            onClick={handleClearFilters}
-            className="w-full md:w-auto"
-          >
-            Clear Filters
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-```
-
-- src\components\modules\Consultation\AIDoctorSuggestion.tsx
-
-```tsx
-"use client";
-
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Sparkles } from "lucide-react";
-import { useState } from "react";
-import { toast } from "sonner";
-
-export default function AIDoctorSuggestion() {
-  const [symptoms, setSymptoms] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [suggestion, setSuggestion] = useState<string>("");
-  const [showSuggestion, setShowSuggestion] = useState(false);
-
-  const handleGetSuggestion = async () => {
-    if (!symptoms.trim() || symptoms.trim().length < 5) {
-      toast.error("Please describe your symptoms (at least 5 characters)");
-      return;
-    }
-
-    setIsLoading(true);
-    setSuggestion("");
-    setShowSuggestion(false);
-
-    try {
-      //   const response = await getDoctorSuggestion(symptoms);
-      //   if (response.success) {
-      //     setSuggestion(response.data || "No suggestion available");
-      //     setShowSuggestion(true);
-      //   } else {
-      //     toast.error(response.message || "Failed to get AI suggestion");
-      //   }
-    } catch (error) {
-      console.error("Error getting AI suggestion:", error);
-      toast.error("Failed to get AI suggestion");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <Card className="bg-linear-to-br from-purple-50 to-blue-50 border-purple-200">
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-purple-600" />
-          <CardTitle className="text-purple-900">
-            AI Doctor Suggestion
-          </CardTitle>
-        </div>
-        <CardDescription>
-          Describe your symptoms and get AI-powered doctor specialty
-          recommendations
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div>
-          <Textarea
-            placeholder="Describe your symptoms in detail (e.g., headache, fever, cough, etc.)..."
-            value={symptoms}
-            onChange={(e) => setSymptoms(e.target.value)}
-            rows={4}
-            className="resize-none bg-white"
-            disabled={isLoading}
-          />
-          <p className="text-xs text-muted-foreground mt-1">
-            {symptoms.length} characters
-          </p>
-        </div>
-
-        <Button
-          onClick={handleGetSuggestion}
-          disabled={isLoading || symptoms.trim().length < 5}
-          className="w-full bg-purple-600 hover:bg-purple-700"
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Getting AI Suggestion...
-            </>
-          ) : (
-            <>
-              <Sparkles className="mr-2 h-4 w-4" />
-              Get AI Recommendation
-            </>
-          )}
-        </Button>
-
-        {showSuggestion && suggestion && (
-          <div className="space-y-3 p-4 bg-white rounded-lg border border-purple-200">
-            <div className="flex items-center gap-2">
-              <Badge
-                variant="outline"
-                className="bg-purple-100 text-purple-700"
-              >
-                AI Recommendation
-              </Badge>
-            </div>
-            <div className="prose prose-sm max-w-none">
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                {suggestion}
-              </p>
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-```
-
-## 72-11 Completing Doctors Detail Page
-
-- src\components\modules\DoctorDetails\DoctorProfileContent.tsx
-
-```tsx
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { IDoctor } from "@/types/doctor.interface";
-import {
-  Briefcase,
-  Calendar,
-  DollarSign,
-  GraduationCap,
-  Hospital,
-  Mail,
-  MapPin,
-  Phone,
-  Star,
-} from "lucide-react";
-
-interface DoctorProfileContentProps {
-  doctor: IDoctor;
-}
-
-const DoctorProfileContent = ({ doctor }: DoctorProfileContentProps) => {
-  const initials = doctor.name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-
-  return (
-    <div className="space-y-6">
-      {/* Doctor Header Card */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col md:flex-row gap-6">
-            {/* Profile Picture */}
-            <div className="flex justify-center md:justify-start">
-              <Avatar className="h-32 w-32">
-                {doctor.profilePhoto ? (
-                  <AvatarImage
-                    src={
-                      typeof doctor.profilePhoto === "string"
-                        ? doctor.profilePhoto
-                        : undefined
-                    }
-                    alt={doctor.name}
-                  />
-                ) : (
-                  <AvatarFallback className="text-3xl">
-                    {initials}
-                  </AvatarFallback>
-                )}
-              </Avatar>
-            </div>
-
-            {/* Doctor Info */}
-            <div className="flex-1 space-y-4">
-              <div>
-                <h1 className="text-3xl font-bold">{doctor.name}</h1>
-                <p className="text-muted-foreground mt-1">
-                  {doctor.designation}
-                </p>
-              </div>
-
-              {/* Specialties */}
-              {doctor.doctorSpecialties &&
-                doctor.doctorSpecialties.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {doctor.doctorSpecialties.map((specialty) => (
-                      <Badge key={specialty.specialitiesId} variant="secondary">
-                        {specialty.specialties?.title || "Specialty"}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-
-              {/* Rating & Fee */}
-              <div className="flex flex-wrap gap-4">
-                {doctor.averageRating && (
-                  <div className="flex items-center gap-2">
-                    <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-                    <span className="font-semibold">
-                      {doctor.averageRating.toFixed(1)}
-                    </span>
-                  </div>
-                )}
-                <div className="flex items-center gap-2 text-primary">
-                  <DollarSign className="h-5 w-5" />
-                  <span className="font-semibold">
-                    ${doctor.appointmentFee}
-                  </span>
-                  <span className="text-sm text-muted-foreground">
-                    per visit
-                  </span>
-                </div>
-              </div>
-
-              {/* {!isModal && (
-                <div className="flex gap-4">
-                  <Button>Book Appointment</Button>
-                  <Button variant="outline">View Schedule</Button>
-                </div>
-              )} */}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Contact Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Contact Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center gap-3">
-              <Mail className="h-5 w-5 text-muted-foreground" />
-              <span>{doctor.email}</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <Phone className="h-5 w-5 text-muted-foreground" />
-              <span>{doctor.contactNumber}</span>
-            </div>
-            {doctor.address && (
-              <div className="flex items-start gap-3">
-                <MapPin className="h-5 w-5 text-muted-foreground mt-1" />
-                <span>{doctor.address}</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Professional Details */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Professional Details</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center gap-3">
-              <Briefcase className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">Experience</p>
-                <p className="font-semibold">
-                  {doctor.experience
-                    ? `${doctor.experience} years`
-                    : "Not specified"}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Hospital className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Current Workplace
-                </p>
-                <p className="font-semibold">{doctor.currentWorkingPlace}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Calendar className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Registration Number
-                </p>
-                <p className="font-semibold">{doctor.registrationNumber}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Qualification */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <GraduationCap className="h-5 w-5" />
-            Qualification & Education
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">{doctor.qualification}</p>
-        </CardContent>
-      </Card>
-    </div>
-  );
-};
-
-export default DoctorProfileContent;
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { IDoctor } from "@/types/doctor.interface";
-import {
-  Briefcase,
-  Calendar,
-  DollarSign,
-  GraduationCap,
-  Hospital,
-  Mail,
-  MapPin,
-  Phone,
-  Star,
-} from "lucide-react";
-
-interface DoctorProfileContentProps {
-  doctor: IDoctor;
-}
-
-const DoctorProfileContent = ({ doctor }: DoctorProfileContentProps) => {
-  const initials = doctor.name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-
-  return (
-    <div className="space-y-6">
-      {/* Doctor Header Card */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col md:flex-row gap-6">
-            {/* Profile Picture */}
-            <div className="flex justify-center md:justify-start">
-              <Avatar className="h-32 w-32">
-                {doctor.profilePhoto ? (
-                  <AvatarImage
-                    src={
-                      typeof doctor.profilePhoto === "string"
-                        ? doctor.profilePhoto
-                        : undefined
-                    }
-                    alt={doctor.name}
-                  />
-                ) : (
-                  <AvatarFallback className="text-3xl">
-                    {initials}
-                  </AvatarFallback>
-                )}
-              </Avatar>
-            </div>
-
-            {/* Doctor Info */}
-            <div className="flex-1 space-y-4">
-              <div>
-                <h1 className="text-3xl font-bold">{doctor.name}</h1>
-                <p className="text-muted-foreground mt-1">
-                  {doctor.designation}
-                </p>
-              </div>
-
-              {/* Specialties */}
-              {doctor.doctorSpecialties &&
-                doctor.doctorSpecialties.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {doctor.doctorSpecialties.map((specialty) => (
-                      <Badge key={specialty.specialitiesId} variant="secondary">
-                        {specialty.specialties?.title || "Specialty"}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-
-              {/* Rating & Fee */}
-              <div className="flex flex-wrap gap-4">
-                {doctor.averageRating && (
-                  <div className="flex items-center gap-2">
-                    <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-                    <span className="font-semibold">
-                      {doctor.averageRating.toFixed(1)}
-                    </span>
-                  </div>
-                )}
-                <div className="flex items-center gap-2 text-primary">
-                  <DollarSign className="h-5 w-5" />
-                  <span className="font-semibold">
-                    ${doctor.appointmentFee}
-                  </span>
-                  <span className="text-sm text-muted-foreground">
-                    per visit
-                  </span>
-                </div>
-              </div>
-
-              {/* {!isModal && (
-                <div className="flex gap-4">
-                  <Button>Book Appointment</Button>
-                  <Button variant="outline">View Schedule</Button>
-                </div>
-              )} */}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Contact Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Contact Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center gap-3">
-              <Mail className="h-5 w-5 text-muted-foreground" />
-              <span>{doctor.email}</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <Phone className="h-5 w-5 text-muted-foreground" />
-              <span>{doctor.contactNumber}</span>
-            </div>
-            {doctor.address && (
-              <div className="flex items-start gap-3">
-                <MapPin className="h-5 w-5 text-muted-foreground mt-1" />
-                <span>{doctor.address}</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Professional Details */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Professional Details</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center gap-3">
-              <Briefcase className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">Experience</p>
-                <p className="font-semibold">
-                  {doctor.experience
-                    ? `${doctor.experience} years`
-                    : "Not specified"}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Hospital className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Current Workplace
-                </p>
-                <p className="font-semibold">{doctor.currentWorkingPlace}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Calendar className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Registration Number
-                </p>
-                <p className="font-semibold">{doctor.registrationNumber}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Qualification */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <GraduationCap className="h-5 w-5" />
-            Qualification & Education
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">{doctor.qualification}</p>
-        </CardContent>
-      </Card>
-    </div>
-  );
-};
-
-export default DoctorProfileContent;
-
-```
-
-- src\components\modules\DoctorDetails\DoctorReviews.tsx
-
-```tsx
-"use client";
-
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getReviews } from "@/services/patient/reviews.services";
-import { format } from "date-fns";
-import { Star, User } from "lucide-react";
-import { useEffect, useState } from "react";
-
-interface Review {
-  id: string;
-  rating: number;
-  comment: string;
-  createdAt: string;
-  patient?: {
-    name: string;
-    profilePhoto?: string;
-  };
-}
-
-interface DoctorReviewsProps {
-  doctorId: string;
-}
-
-export default function DoctorReviews({ doctorId }: DoctorReviewsProps) {
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ averageRating: 0, totalReviews: 0 });
-
-  useEffect(() => {
-    const loadReviews = async () => {
-      try {
-        setLoading(true);
-        const response = await getReviews(`?doctorId=${doctorId}&limit=10`);
-
-        if (response.success && response.data) {
-          setReviews(response.data);
-
-          // Calculate stats
-          if (response.data.length > 0) {
-            const total = response.data.reduce(
-              (sum: number, review: Review) => sum + review.rating,
-              0
-            );
-            setStats({
-              averageRating: total / response.data.length,
-              totalReviews: response.data.length,
-            });
-          }
-        }
-      } catch (error) {
-        console.error("Error loading reviews:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadReviews();
-  }, [doctorId]);
-
-  const renderStars = (rating: number) => {
-    return Array.from({ length: 5 }, (_, i) => (
-      <Star
-        key={i}
-        className={`h-4 w-4 ${
-          i < rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
-        }`}
-      />
-    ));
-  };
-
-  if (loading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Patient Reviews</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">Loading reviews...</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>Patient Reviews</CardTitle>
-          {stats.totalReviews > 0 && (
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1">
-                {renderStars(Math.round(stats.averageRating))}
-              </div>
-              <span className="font-semibold">
-                {stats.averageRating.toFixed(1)}
-              </span>
-              <Badge variant="secondary">{stats.totalReviews} reviews</Badge>
-            </div>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent>
-        {reviews.length === 0 ? (
-          <p className="text-muted-foreground text-center py-8">
-            No reviews yet. Be the first to review this doctor!
-          </p>
-        ) : (
-          <div className="space-y-4">
-            {reviews.map((review) => (
-              <div
-                key={review.id}
-                className="border-b last:border-0 pb-4 last:pb-0"
-              >
-                <div className="flex items-start gap-3">
-                  <Avatar className="h-10 w-10">
-                    {review.patient?.profilePhoto ? (
-                      <AvatarImage
-                        src={review.patient.profilePhoto}
-                        alt={review.patient.name}
-                      />
-                    ) : (
-                      <AvatarFallback>
-                        <User className="h-5 w-5" />
-                      </AvatarFallback>
-                    )}
-                  </Avatar>
-                  <div className="flex-1 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">
-                          {review.patient?.name || "Anonymous"}
-                        </p>
-                        <div className="flex items-center gap-1 mt-1">
-                          {renderStars(review.rating)}
-                        </div>
-                      </div>
-                      <span className="text-sm text-muted-foreground">
-                        {format(new Date(review.createdAt), "MMM d, yyyy")}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-700">{review.comment}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 ```
 
 - src\services\patient\reviews.services.ts
 
 ```ts 
-
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use server"
 
 import { serverFetch } from "@/lib/server-fetch";
+import { IReviewFormData } from "@/types/review.interface";
 
 export async function getReviews(queryString?: string) {
     try {
@@ -3683,32 +334,3473 @@ export async function getReviews(queryString?: string) {
         };
     }
 }
+
+export async function createReview(data: IReviewFormData) {
+    try {
+        const response = await serverFetch.post("/review", {
+            body: JSON.stringify(data),
+            headers: {
+                "Content-Type": "application/json",
+            },
+        });
+
+        const result = await response.json();
+        return result;
+    } catch (error: any) {
+        console.error("Error creating review:", error);
+        return {
+            success: false,
+            message:
+                process.env.NODE_ENV === "development"
+                    ? error.message
+                    : "Failed to create review",
+        };
+    }
+}
 ```
 
-- src/app/(commonLayout)/consultation/doctor/[id]/page.tsx
+## 73-3 Creating Page Structures For Appointment Booking, Appointment List For Patient And Doctor
+- src/app/(dashboardLayout)/(patientDashboardLayout)/dashboard/book-appointment/[doctorId]/[scheduleId]/page.tsx
 
-```tsx 
-
-import DoctorProfileContent from "@/components/modules/DoctorDetails/DoctorProfileContent";
-import DoctorReviews from "@/components/modules/DoctorDetails/DoctorReviews";
+```tsx
+import AppointmentConfirmation from "@/components/modules/Patient/PatientAppointment/AppointmentConfirmation";
 import { getDoctorById } from "@/services/admin/doctorManagement";
+import { getScheduleById } from "@/services/admin/schedulesManagement";
+import { IDoctor } from "@/types/doctor.interface";
+import { ISchedule } from "@/types/schedule.interface";
+import { notFound } from "next/navigation";
 
-const DoctorDetailPage = async ({
+interface BookAppointmentPageProps {
+  params: Promise<{
+    doctorId: string;
+    scheduleId: string;
+  }>;
+}
+
+export default async function BookAppointmentPage({
   params,
-}: {
-  params: Promise<{ id: string }>;
-}) => {
-  const { id } = await params;
-  const result = await getDoctorById(id);
+}: BookAppointmentPageProps) {
+  const { doctorId, scheduleId } = await params;
+
+  // Fetch doctor and schedule in parallel
+  const [doctorResponse, scheduleResponse] = await Promise.all([
+    getDoctorById(doctorId),
+    getScheduleById(scheduleId),
+  ]);
+
+  if (!doctorResponse?.success || !scheduleResponse?.success) {
+    notFound();
+  }
+
+  const doctor: IDoctor = doctorResponse.data;
+  const schedule: ISchedule = scheduleResponse.data;
+
   return (
-    <div className="container mx-auto px-4 py-8 space-y-6">
-      <DoctorProfileContent doctor={result.data} />
-      <DoctorReviews doctorId={id} />
+    <div className="container mx-auto px-4 py-8">
+      <AppointmentConfirmation doctor={doctor} schedule={schedule} />
+    </div>
+  );
+}
+
+```
+- src\app\(dashboardLayout)\(patientDashboardLayout)\dashboard\my-appointments\[id]\page.tsx
+
+```tsx
+import AppointmentDetails from "@/components/modules/Patient/PatientAppointment/AppointmentDetails";
+import { getAppointmentById } from "@/services/patient/appointment.service";
+import { IAppointment } from "@/types/appointments.interface";
+import { notFound } from "next/navigation";
+
+interface AppointmentDetailPageProps {
+  params: Promise<{
+    id: string;
+  }>;
+}
+
+export default async function AppointmentDetailPage({
+  params,
+}: AppointmentDetailPageProps) {
+  const { id } = await params;
+
+  const response = await getAppointmentById(id);
+  console.log({ response });
+
+  if (!response?.success || !response?.data) {
+    notFound();
+  }
+
+  const appointment: IAppointment = response.data;
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <AppointmentDetails appointment={appointment} />
+    </div>
+  );
+}
+
+```
+
+## 73-4 Creating Component And Page For Appointment Booking Of Patient Dashboard
+- src\components\modules\Patient\PatientAppointment\AppointmentConfirmation.tsx
+
+```tsx
+"use client";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { createAppointment } from "@/services/patient/appointment.service";
+import { IDoctor } from "@/types/doctor.interface";
+import { ISchedule } from "@/types/schedule.interface";
+import { format } from "date-fns";
+import {
+  Calendar,
+  CheckCircle2,
+  Clock,
+  Loader2,
+  MapPin,
+  Phone,
+  Stethoscope,
+  User,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { toast } from "sonner";
+
+interface AppointmentConfirmationProps {
+  doctor: IDoctor;
+  schedule: ISchedule;
+}
+
+const AppointmentConfirmation = ({
+  doctor,
+  schedule,
+}: AppointmentConfirmationProps) => {
+  const router = useRouter();
+  const [isBooking, setIsBooking] = useState(false);
+  const [bookingSuccess, setBookingSuccess] = useState(false);
+
+  const handleConfirmBooking = async () => {
+    setIsBooking(true);
+
+    try {
+      const result = await createAppointment({
+        doctorId: doctor.id!,
+        scheduleId: schedule.id,
+      });
+
+      if (result.success) {
+        setBookingSuccess(true);
+        toast.success("Appointment booked successfully!");
+
+        // Redirect after 2 seconds
+        setTimeout(() => {
+          router.push("/dashboard/my-appointments");
+        }, 2000);
+      } else {
+        toast.error(result.message || "Failed to book appointment");
+        setIsBooking(false);
+      }
+    } catch (error) {
+      toast.error("An error occurred while booking the appointment");
+      setIsBooking(false);
+      console.error(error);
+    }
+  };
+
+  if (bookingSuccess) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <Card className="border-green-200 bg-green-50">
+          <CardContent className="pt-6">
+            <div className="text-center space-y-4">
+              <div className="flex justify-center">
+                <CheckCircle2 className="h-16 w-16 text-green-600" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-green-900">
+                  Appointment Confirmed!
+                </h2>
+                <p className="text-green-700 mt-2">
+                  Your appointment has been successfully booked
+                </p>
+              </div>
+              <p className="text-sm text-green-600">
+                Redirecting to your appointments...
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">
+          Confirm Appointment
+        </h1>
+        <p className="text-muted-foreground mt-2">
+          Review the details below and confirm your appointment
+        </p>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Doctor Information Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Doctor Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <p className="text-2xl font-semibold">{doctor.name}</p>
+              <p className="text-muted-foreground">{doctor.designation}</p>
+            </div>
+
+            <Separator />
+
+            {doctor.doctorSpecialties &&
+              doctor.doctorSpecialties.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Stethoscope className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Specialties</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {doctor.doctorSpecialties.map((ds, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-md border border-blue-200"
+                      >
+                        {ds.specialties?.title || "N/A"}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            <Separator />
+
+            <div className="space-y-2">
+              {doctor.qualification && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Qualification:
+                  </span>
+                  <span className="text-sm font-medium">
+                    {doctor.qualification}
+                  </span>
+                </div>
+              )}
+
+              {doctor.experience !== undefined && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Experience:
+                  </span>
+                  <span className="text-sm font-medium">
+                    {doctor.experience} years
+                  </span>
+                </div>
+              )}
+
+              {doctor.currentWorkingPlace && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Working at:
+                  </span>
+                  <span className="text-sm font-medium">
+                    {doctor.currentWorkingPlace}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              {doctor.contactNumber && (
+                <div className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">{doctor.contactNumber}</span>
+                </div>
+              )}
+
+              {doctor.address && (
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">{doctor.address}</span>
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-blue-900">
+                  Consultation Fee
+                </span>
+                <span className="text-xl font-bold text-blue-600">
+                  ${doctor.appointmentFee}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Schedule Information Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Appointment Schedule
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="bg-linear-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6 space-y-4">
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Date</p>
+                <p className="text-2xl font-bold text-blue-900">
+                  {format(new Date(schedule.startDateTime), "EEEE")}
+                </p>
+                <p className="text-lg text-blue-700">
+                  {format(new Date(schedule.startDateTime), "MMMM d, yyyy")}
+                </p>
+              </div>
+
+              <Separator />
+
+              <div className="flex items-center gap-3">
+                <Clock className="h-5 w-5 text-blue-600" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Time</p>
+                  <p className="text-lg font-semibold text-blue-900">
+                    {format(new Date(schedule.startDateTime), "h:mm a")} -{" "}
+                    {format(new Date(schedule.endDateTime), "h:mm a")}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3 pt-4">
+              <h3 className="font-semibold text-sm">Important Information</h3>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-0.5">•</span>
+                  <span>
+                    Please arrive 10 minutes before your scheduled time
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-0.5">•</span>
+                  <span>
+                    Bring any relevant medical records or prescriptions
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-0.5">•</span>
+                  <span>
+                    You can cancel or reschedule from your appointments page
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-0.5">•</span>
+                  <span>
+                    A confirmation will be sent to your registered email
+                  </span>
+                </li>
+              </ul>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-3 pt-2">
+              <Button
+                onClick={handleConfirmBooking}
+                disabled={isBooking}
+                className="w-full"
+                size="lg"
+              >
+                {isBooking ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Booking...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    Confirm & Book Appointment
+                  </>
+                )}
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={() => router.back()}
+                disabled={isBooking}
+                className="w-full"
+              >
+                Go Back
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };
 
-export default DoctorDetailPage;
+export default AppointmentConfirmation;
 
 ```
-- this module is watching complete
+
+- src\components\modules\Patient\PatientAppointment\AppointmentDetails.tsx
+
+```tsx
+/* eslint-disable @typescript-eslint/no-explicit-any */
+"use client";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { format } from "date-fns";
+import {
+  AlertCircle,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  MapPin,
+  Phone,
+  Star,
+  Stethoscope,
+  User,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+// import ReviewDialog from "./ReviewDialog";
+import {
+  AppointmentStatus,
+  IAppointment,
+} from "@/types/appointments.interface";
+import ReviewDialog from "./ReviewDialog";
+
+interface AppointmentDetailProps {
+  appointment: IAppointment;
+}
+
+const AppointmentDetails = ({ appointment }: AppointmentDetailProps) => {
+  const router = useRouter();
+  const [showReviewDialog, setShowReviewDialog] = useState(false);
+
+  const isCompleted = appointment.status === AppointmentStatus.COMPLETED;
+  const canReview = isCompleted && !appointment.review;
+
+  const getStatusBadge = (status: AppointmentStatus) => {
+    const statusConfig: Record<
+      AppointmentStatus,
+      { variant: any; label: string; className?: string }
+    > = {
+      [AppointmentStatus.SCHEDULED]: {
+        variant: "default",
+        label: "Scheduled",
+        className: "bg-blue-500 hover:bg-blue-600",
+      },
+      [AppointmentStatus.INPROGRESS]: {
+        variant: "secondary",
+        label: "In Progress",
+      },
+      [AppointmentStatus.COMPLETED]: {
+        variant: "default",
+        label: "Completed",
+        className: "bg-green-500 hover:bg-green-600",
+      },
+      [AppointmentStatus.CANCELED]: {
+        variant: "destructive",
+        label: "Canceled",
+      },
+    };
+
+    const config = statusConfig[status];
+    return (
+      <Badge variant={config.variant} className={config.className}>
+        {config.label}
+      </Badge>
+    );
+  };
+  return (
+    <div className="max-w-5xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Appointment Details
+          </h1>
+          <p className="text-muted-foreground mt-2">
+            Complete information about your appointment
+          </p>
+        </div>
+        <Button variant="outline" onClick={() => router.back()}>
+          Back
+        </Button>
+      </div>
+
+      {/* Review Notification - Only show if can review (completed but no review) */}
+      {canReview && (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-amber-900">
+                  Review This Appointment
+                </h3>
+                <p className="text-sm text-amber-700 mt-1">
+                  Your appointment has been completed. Share your experience by
+                  leaving a review for Dr. {appointment.doctor?.name}.
+                </p>
+                <Button
+                  onClick={() => setShowReviewDialog(true)}
+                  className="mt-3"
+                  size="sm"
+                >
+                  Write a Review
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Cannot Review Yet - Only show if not completed and no review */}
+      {!isCompleted && !appointment.review && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+              <div>
+                <h3 className="font-semibold text-blue-900">
+                  Review Not Available Yet
+                </h3>
+                <p className="text-sm text-blue-700 mt-1">
+                  You can review this appointment after it has been completed.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Doctor Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Doctor Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <p className="text-2xl font-semibold">
+                {appointment.doctor?.name || "N/A"}
+              </p>
+              <p className="text-muted-foreground">
+                {appointment.doctor?.designation || "Doctor"}
+              </p>
+            </div>
+
+            <Separator />
+
+            {appointment.doctor?.doctorSpecialties &&
+              appointment.doctor.doctorSpecialties.length > 0 && (
+                <>
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Stethoscope className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">Specialties</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {appointment.doctor.doctorSpecialties.map((ds, idx) => (
+                        <Badge key={idx} variant="secondary">
+                          {ds.specialties?.title || "N/A"}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <Separator />
+                </>
+              )}
+
+            <div className="space-y-2">
+              {appointment.doctor?.qualification && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Qualification:</span>
+                  <span className="font-medium">
+                    {appointment.doctor.qualification}
+                  </span>
+                </div>
+              )}
+
+              {appointment.doctor?.experience !== undefined && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Experience:</span>
+                  <span className="font-medium">
+                    {appointment.doctor.experience} years
+                  </span>
+                </div>
+              )}
+
+              {appointment.doctor?.currentWorkingPlace && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Working at:</span>
+                  <span className="font-medium">
+                    {appointment.doctor.currentWorkingPlace}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              {appointment.doctor?.contactNumber && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <span>{appointment.doctor.contactNumber}</span>
+                </div>
+              )}
+
+              {appointment.doctor?.address && (
+                <div className="flex items-start gap-2 text-sm">
+                  <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                  <span>{appointment.doctor.address}</span>
+                </div>
+              )}
+            </div>
+
+            {appointment.doctor?.appointmentFee !== undefined && (
+              <>
+                <Separator />
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-blue-900">
+                      Consultation Fee
+                    </span>
+                    <span className="text-xl font-bold text-blue-600">
+                      ${appointment.doctor.appointmentFee}
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Appointment Details */}
+        <div className="space-y-6 lg:col-span-1">
+          {/* Status */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Appointment Status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">
+                  Current Status
+                </span>
+                {getStatusBadge(appointment.status)}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Schedule */}
+          {appointment.schedule && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  Schedule
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="bg-linear-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 space-y-3">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Date</p>
+                    <p className="text-xl font-bold text-blue-900">
+                      {format(
+                        new Date(appointment.schedule.startDateTime),
+                        "EEEE"
+                      )}
+                    </p>
+                    <p className="text-blue-700">
+                      {format(
+                        new Date(appointment.schedule.startDateTime),
+                        "MMMM d, yyyy"
+                      )}
+                    </p>
+                  </div>
+
+                  <Separator className="bg-blue-200" />
+
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-5 w-5 text-blue-600" />
+                    <div>
+                      <p className="text-sm text-muted-foreground">Time</p>
+                      <p className="font-semibold text-blue-900">
+                        {format(
+                          new Date(appointment.schedule.startDateTime),
+                          "h:mm a"
+                        )}{" "}
+                        -{" "}
+                        {format(
+                          new Date(appointment.schedule.endDateTime),
+                          "h:mm a"
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Prescription */}
+          {appointment.prescription && (
+            <Card className="border-green-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-green-700">
+                  <CheckCircle2 className="h-5 w-5" />
+                  Prescription Available
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="bg-green-50 rounded-lg p-3 space-y-2">
+                  <div>
+                    <span className="text-sm font-medium text-green-900">
+                      Instructions:
+                    </span>
+                    <p className="text-sm text-green-700 mt-1">
+                      {appointment.prescription.instructions}
+                    </p>
+                  </div>
+
+                  {appointment.prescription.followUpDate && (
+                    <div>
+                      <span className="text-sm font-medium text-green-900">
+                        Follow-up Date:
+                      </span>
+                      <p className="text-sm text-green-700">
+                        {format(
+                          new Date(appointment.prescription.followUpDate),
+                          "MMMM d, yyyy"
+                        )}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+
+      {/* Review Section - Full Width Below */}
+      {appointment.review && (
+        <Card className="border-yellow-200">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-yellow-700">
+              <Star className="h-5 w-5 fill-yellow-600" />
+              Your Review
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="bg-yellow-50 rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Star
+                    key={star}
+                    className={`h-5 w-5 ${
+                      star <= appointment.review!.rating
+                        ? "fill-yellow-500 text-yellow-500"
+                        : "text-gray-300"
+                    }`}
+                  />
+                ))}
+                <span className="ml-2 text-sm font-medium text-yellow-900">
+                  {appointment.review.rating}/5
+                </span>
+              </div>
+
+              {appointment.review.comment && (
+                <div>
+                  <p className="text-sm text-yellow-900 font-medium mb-1">
+                    Comment:
+                  </p>
+                  <p className="text-sm text-yellow-800">
+                    {appointment.review.comment}
+                  </p>
+                </div>
+              )}
+
+              <p className="text-xs text-yellow-600 italic">
+                Reviews cannot be edited or deleted once submitted.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Review Dialog */}
+      {canReview && (
+        <ReviewDialog
+          isOpen={showReviewDialog}
+          onClose={() => setShowReviewDialog(false)}
+          appointmentId={appointment.id}
+          doctorName={appointment.doctor?.name || "the doctor"}
+        />
+      )}
+    </div>
+  );
+};
+
+export default AppointmentDetails;
+
+```
+
+- \src\components\modules\Patient\PatientAppointment\AppointmentsList.tsx
+
+```tsx
+/* eslint-disable @typescript-eslint/no-explicit-any */
+"use client";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import {
+  AppointmentStatus,
+  IAppointment,
+} from "@/types/appointments.interface";
+import { format } from "date-fns";
+import {
+  Calendar,
+  Clock,
+  FileText,
+  MapPin,
+  MessageSquare,
+  Star,
+  Stethoscope,
+  User,
+} from "lucide-react";
+import Link from "next/link";
+
+interface AppointmentsListProps {
+  appointments: IAppointment[];
+}
+
+const AppointmentsList = ({ appointments }: AppointmentsListProps) => {
+  const getStatusBadge = (status: AppointmentStatus) => {
+    const statusConfig: Record<
+      AppointmentStatus,
+      { variant: any; label: string; className?: string }
+    > = {
+      [AppointmentStatus.SCHEDULED]: {
+        variant: "default",
+        label: "Scheduled",
+        className: "bg-blue-500 hover:bg-blue-600",
+      },
+      [AppointmentStatus.INPROGRESS]: {
+        variant: "secondary",
+        label: "In Progress",
+      },
+      [AppointmentStatus.COMPLETED]: {
+        variant: "default",
+        label: "Completed",
+        className: "bg-green-500 hover:bg-green-600",
+      },
+      [AppointmentStatus.CANCELED]: {
+        variant: "destructive",
+        label: "Canceled",
+      },
+    };
+
+    const config = statusConfig[status];
+    return (
+      <Badge variant={config.variant} className={config.className}>
+        {config.label}
+      </Badge>
+    );
+  };
+
+  if (appointments.length === 0) {
+    return (
+      <Card className="border-dashed">
+        <CardContent className="flex flex-col items-center justify-center py-12">
+          <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-semibold mb-2">No Appointments Yet</h3>
+          <p className="text-muted-foreground text-center max-w-sm">
+            You haven&apos;t booked any appointments. Browse our doctors and
+            book your first consultation.
+          </p>
+          <Button className="mt-4" asChild>
+            <a href="/consultation">Find a Doctor</a>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+  return (
+    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {appointments.map((appointment) => (
+        <Card
+          key={appointment.id}
+          className="hover:shadow-lg transition-shadow"
+        >
+          <CardContent className="pt-6 space-y-4">
+            {/* Status and Review Badge */}
+            <div className="flex justify-between items-start gap-2 flex-wrap">
+              {getStatusBadge(appointment.status)}
+              <div className="flex gap-2 flex-wrap">
+                {appointment.prescription && (
+                  <Badge
+                    variant="outline"
+                    className="bg-green-50 text-green-700"
+                  >
+                    <FileText className="h-3 w-3 mr-1" />
+                    Prescription
+                  </Badge>
+                )}
+                {appointment.status === AppointmentStatus.COMPLETED &&
+                  !appointment.review && (
+                    <Badge
+                      variant="outline"
+                      className="bg-amber-50 text-amber-700 border-amber-300 animate-pulse"
+                    >
+                      <MessageSquare className="h-3 w-3 mr-1" />
+                      Can Review
+                    </Badge>
+                  )}
+              </div>
+            </div>
+
+            {/* Doctor Info */}
+            <div>
+              <div className="flex items-start gap-3">
+                <div className="bg-blue-100 rounded-full p-2">
+                  <User className="h-5 w-5 text-blue-600" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-lg">
+                    {appointment.doctor?.name || "N/A"}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {appointment.doctor?.designation || "Doctor"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Specialties */}
+            {appointment.doctor?.doctorSpecialties &&
+              appointment.doctor.doctorSpecialties.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Stethoscope className="h-4 w-4 text-muted-foreground" />
+                  {appointment.doctor.doctorSpecialties
+                    .slice(0, 2)
+                    .map((ds, idx) => (
+                      <Badge key={idx} variant="secondary" className="text-xs">
+                        {ds.specialties?.title || "N/A"}
+                      </Badge>
+                    ))}
+                  {appointment.doctor.doctorSpecialties.length > 2 && (
+                    <Badge variant="secondary" className="text-xs">
+                      +{appointment.doctor.doctorSpecialties.length - 2} more
+                    </Badge>
+                  )}
+                </div>
+              )}
+
+            {/* Schedule */}
+            {appointment.schedule && (
+              <div className="space-y-2 bg-gray-50 rounded-lg p-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium">
+                    {format(
+                      new Date(appointment.schedule.startDateTime),
+                      "EEEE, MMM d, yyyy"
+                    )}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <span>
+                    {format(
+                      new Date(appointment.schedule.startDateTime),
+                      "h:mm a"
+                    )}{" "}
+                    -{" "}
+                    {format(
+                      new Date(appointment.schedule.endDateTime),
+                      "h:mm a"
+                    )}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Address */}
+            {appointment.doctor?.address && (
+              <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                <MapPin className="h-4 w-4 mt-0.5 shrink-0" />
+                <span className="line-clamp-2">
+                  {appointment.doctor.address}
+                </span>
+              </div>
+            )}
+
+            {/* Review Status */}
+            {appointment.status === AppointmentStatus.COMPLETED && (
+              <div>
+                {appointment.review ? (
+                  <div className="flex items-center gap-2 text-sm text-yellow-600 bg-yellow-50 rounded-lg p-2">
+                    <Star className="h-4 w-4 fill-yellow-600" />
+                    <span>Rated {appointment.review.rating}/5</span>
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground bg-gray-50 rounded-lg p-2">
+                    No review yet
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+
+          <CardFooter className="border-t pt-4">
+            <Button variant="outline" size="sm" className="w-full" asChild>
+              <Link href={`/dashboard/my-appointments/${appointment.id}`}>
+                View Details
+              </Link>
+            </Button>
+          </CardFooter>
+        </Card>
+      ))}
+    </div>
+  );
+};
+
+export default AppointmentsList;
+
+```
+
+- \src\components\modules\Patient\PatientAppointment\ReviewDialog.tsx
+
+```tsx
+"use client";
+
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { createReview } from "@/services/patient/reviews.services";
+import { Star } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { toast } from "sonner";
+
+interface ReviewDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  appointmentId: string;
+  doctorName: string;
+}
+
+export default function ReviewDialog({
+  isOpen,
+  onClose,
+  appointmentId,
+  doctorName,
+}: ReviewDialogProps) {
+  const router = useRouter();
+  const [rating, setRating] = useState(0);
+  const [hoveredRating, setHoveredRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (rating === 0) {
+      toast.error("Please select a rating");
+      return;
+    }
+
+    if (comment.trim().length < 10) {
+      toast.error("Comment must be at least 10 characters");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const result = await createReview({
+        appointmentId,
+        rating,
+        comment: comment.trim(),
+      });
+
+      if (result.success) {
+        toast.success("Review submitted successfully!");
+        onClose();
+        router.refresh();
+      } else {
+        toast.error(result.message || "Failed to submit review");
+      }
+    } catch (error) {
+      toast.error("An error occurred while submitting review");
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (!isSubmitting) {
+      setRating(0);
+      setHoveredRating(0);
+      setComment("");
+      onClose();
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+      <DialogContent className="max-w-md">
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogTitle>Write a Review</DialogTitle>
+            <DialogDescription>
+              Share your experience with Dr. {doctorName}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            {/* Rating */}
+            <div className="space-y-2">
+              <Label htmlFor="rating">Rating *</Label>
+              <div className="flex items-center gap-2">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setRating(star)}
+                    onMouseEnter={() => setHoveredRating(star)}
+                    onMouseLeave={() => setHoveredRating(0)}
+                    className="focus:outline-none transition-transform hover:scale-110"
+                  >
+                    <Star
+                      className={`h-8 w-8 ${
+                        star <= (hoveredRating || rating)
+                          ? "fill-yellow-500 text-yellow-500"
+                          : "text-gray-300"
+                      }`}
+                    />
+                  </button>
+                ))}
+                {rating > 0 && (
+                  <span className="ml-2 text-sm font-medium">
+                    {rating}/5 -{" "}
+                    {rating === 1
+                      ? "Poor"
+                      : rating === 2
+                      ? "Fair"
+                      : rating === 3
+                      ? "Good"
+                      : rating === 4
+                      ? "Very Good"
+                      : "Excellent"}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Comment */}
+            <div className="space-y-2">
+              <Label htmlFor="comment">Comment * (minimum 10 characters)</Label>
+              <Textarea
+                id="comment"
+                placeholder="Share your experience with this doctor..."
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                rows={5}
+                disabled={isSubmitting}
+                className="resize-none"
+              />
+              <p className="text-xs text-muted-foreground">
+                {comment.length} characters
+              </p>
+            </div>
+
+            {/* Warning */}
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <p className="text-sm text-amber-800">
+                <strong>Note:</strong> Reviews cannot be edited or deleted once
+                submitted. Please ensure your feedback is accurate.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleClose}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Submitting..." : "Submit Review"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+```
+
+- src\components\modules\Patient\PatientPrescription\PatientPrescriptionList.tsx
+
+```tsx
+"use client";
+
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { IPrescription } from "@/types/prescription.interface";
+import { format } from "date-fns";
+import { Calendar, Clock, FileText, User } from "lucide-react";
+
+interface PatientPrescriptionsListProps {
+  prescriptions: IPrescription[];
+}
+
+export default function PatientPrescriptionsList({
+  prescriptions = [],
+}: PatientPrescriptionsListProps) {
+  // Sort prescriptions by creation date (latest first)
+  const sortedPrescriptions = [...prescriptions].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+
+  if (prescriptions.length === 0) {
+    return (
+      <Card className="p-8 text-center">
+        <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+        <h3 className="text-lg font-semibold mb-2">No Prescriptions Yet</h3>
+        <p className="text-muted-foreground">
+          Your prescriptions will appear here after your appointments are
+          completed.
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {sortedPrescriptions.map((prescription) => (
+        <Card
+          key={prescription.id}
+          className="p-6 hover:shadow-lg transition-shadow"
+        >
+          {/* Doctor Information */}
+          <div className="flex items-start gap-3 mb-4 pb-4 border-b">
+            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <User className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-lg truncate">
+                {prescription.doctor?.name || "N/A"}
+              </h3>
+              <p className="text-sm text-muted-foreground truncate">
+                {prescription.doctor?.email || "N/A"}
+              </p>
+              {prescription.doctor?.designation && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {prescription.doctor.designation}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Appointment Date */}
+          {prescription.appointment?.schedule?.startDateTime && (
+            <div className="flex items-center gap-2 mb-3 text-sm">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span className="text-muted-foreground">Appointment:</span>
+              <span className="font-medium">
+                {format(
+                  new Date(prescription.appointment.schedule.startDateTime),
+                  "PPP"
+                )}
+              </span>
+            </div>
+          )}
+
+          {/* Instructions Preview */}
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <FileText className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Instructions</span>
+            </div>
+            <div className="bg-muted/50 p-3 rounded-md">
+              <p className="text-sm text-muted-foreground line-clamp-3">
+                {prescription.instructions}
+              </p>
+            </div>
+          </div>
+
+          {/* Follow-up Date */}
+          {prescription.followUpDate && (
+            <div className="mb-4">
+              <Badge
+                variant="outline"
+                className="border-blue-500 text-blue-700 bg-blue-50"
+              >
+                <Calendar className="h-3 w-3 mr-1" />
+                Follow-up: {format(new Date(prescription.followUpDate), "PPP")}
+              </Badge>
+            </div>
+          )}
+
+          {/* Prescribed Date */}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground pt-3 border-t">
+            <Clock className="h-3 w-3" />
+            <span>
+              Prescribed on {format(new Date(prescription.createdAt), "PPP")}
+            </span>
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+```
+
+## 73-5 Creating Components And Page For Appointment List Of Patient Dashboard
+- \src\app\(dashboardLayout)\(patientDashboardLayout)\dashboard\my-appointments\[id]\page.tsx
+
+```tsx 
+import AppointmentsList from "@/components/modules/Patient/PatientAppointment/AppointmentsList";
+import { getMyAppointments } from "@/services/patient/appointment.service";
+import { IAppointment } from "@/types/appointments.interface";
+
+export default async function MyAppointmentsPage() {
+  const response = await getMyAppointments();
+  const appointments: IAppointment[] = response?.data || [];
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">My Appointments</h1>
+        <p className="text-muted-foreground mt-2">
+          View and manage your scheduled appointments
+        </p>
+      </div>
+
+      <AppointmentsList appointments={appointments} />
+    </div>
+  );
+}
+
+```
+- src\components\modules\Patient\PatientAppointment\AppointmentsList.tsx
+
+```tsx 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+"use client";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import {
+  AppointmentStatus,
+  IAppointment,
+} from "@/types/appointments.interface";
+import { format } from "date-fns";
+import {
+  Calendar,
+  Clock,
+  FileText,
+  MapPin,
+  MessageSquare,
+  Star,
+  Stethoscope,
+  User,
+} from "lucide-react";
+import Link from "next/link";
+
+interface AppointmentsListProps {
+  appointments: IAppointment[];
+}
+
+const AppointmentsList = ({ appointments }: AppointmentsListProps) => {
+  const getStatusBadge = (status: AppointmentStatus) => {
+    const statusConfig: Record<
+      AppointmentStatus,
+      { variant: any; label: string; className?: string }
+    > = {
+      [AppointmentStatus.SCHEDULED]: {
+        variant: "default",
+        label: "Scheduled",
+        className: "bg-blue-500 hover:bg-blue-600",
+      },
+      [AppointmentStatus.INPROGRESS]: {
+        variant: "secondary",
+        label: "In Progress",
+      },
+      [AppointmentStatus.COMPLETED]: {
+        variant: "default",
+        label: "Completed",
+        className: "bg-green-500 hover:bg-green-600",
+      },
+      [AppointmentStatus.CANCELED]: {
+        variant: "destructive",
+        label: "Canceled",
+      },
+    };
+
+    const config = statusConfig[status];
+    return (
+      <Badge variant={config.variant} className={config.className}>
+        {config.label}
+      </Badge>
+    );
+  };
+
+  if (appointments.length === 0) {
+    return (
+      <Card className="border-dashed">
+        <CardContent className="flex flex-col items-center justify-center py-12">
+          <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-semibold mb-2">No Appointments Yet</h3>
+          <p className="text-muted-foreground text-center max-w-sm">
+            You haven&apos;t booked any appointments. Browse our doctors and
+            book your first consultation.
+          </p>
+          <Button className="mt-4" asChild>
+            <a href="/consultation">Find a Doctor</a>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+  return (
+    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {appointments.map((appointment) => (
+        <Card
+          key={appointment.id}
+          className="hover:shadow-lg transition-shadow"
+        >
+          <CardContent className="pt-6 space-y-4">
+            {/* Status and Review Badge */}
+            <div className="flex justify-between items-start gap-2 flex-wrap">
+              {getStatusBadge(appointment.status)}
+              <div className="flex gap-2 flex-wrap">
+                {appointment.prescription && (
+                  <Badge
+                    variant="outline"
+                    className="bg-green-50 text-green-700"
+                  >
+                    <FileText className="h-3 w-3 mr-1" />
+                    Prescription
+                  </Badge>
+                )}
+                {appointment.status === AppointmentStatus.COMPLETED &&
+                  !appointment.review && (
+                    <Badge
+                      variant="outline"
+                      className="bg-amber-50 text-amber-700 border-amber-300 animate-pulse"
+                    >
+                      <MessageSquare className="h-3 w-3 mr-1" />
+                      Can Review
+                    </Badge>
+                  )}
+              </div>
+            </div>
+
+            {/* Doctor Info */}
+            <div>
+              <div className="flex items-start gap-3">
+                <div className="bg-blue-100 rounded-full p-2">
+                  <User className="h-5 w-5 text-blue-600" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-lg">
+                    {appointment.doctor?.name || "N/A"}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {appointment.doctor?.designation || "Doctor"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Specialties */}
+            {appointment.doctor?.doctorSpecialties &&
+              appointment.doctor.doctorSpecialties.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Stethoscope className="h-4 w-4 text-muted-foreground" />
+                  {appointment.doctor.doctorSpecialties
+                    .slice(0, 2)
+                    .map((ds, idx) => (
+                      <Badge key={idx} variant="secondary" className="text-xs">
+                        {ds.specialties?.title || "N/A"}
+                      </Badge>
+                    ))}
+                  {appointment.doctor.doctorSpecialties.length > 2 && (
+                    <Badge variant="secondary" className="text-xs">
+                      +{appointment.doctor.doctorSpecialties.length - 2} more
+                    </Badge>
+                  )}
+                </div>
+              )}
+
+            {/* Schedule */}
+            {appointment.schedule && (
+              <div className="space-y-2 bg-gray-50 rounded-lg p-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium">
+                    {format(
+                      new Date(appointment.schedule.startDateTime),
+                      "EEEE, MMM d, yyyy"
+                    )}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <span>
+                    {format(
+                      new Date(appointment.schedule.startDateTime),
+                      "h:mm a"
+                    )}{" "}
+                    -{" "}
+                    {format(
+                      new Date(appointment.schedule.endDateTime),
+                      "h:mm a"
+                    )}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Address */}
+            {appointment.doctor?.address && (
+              <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                <MapPin className="h-4 w-4 mt-0.5 shrink-0" />
+                <span className="line-clamp-2">
+                  {appointment.doctor.address}
+                </span>
+              </div>
+            )}
+
+            {/* Review Status */}
+            {appointment.status === AppointmentStatus.COMPLETED && (
+              <div>
+                {appointment.review ? (
+                  <div className="flex items-center gap-2 text-sm text-yellow-600 bg-yellow-50 rounded-lg p-2">
+                    <Star className="h-4 w-4 fill-yellow-600" />
+                    <span>Rated {appointment.review.rating}/5</span>
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground bg-gray-50 rounded-lg p-2">
+                    No review yet
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+
+          <CardFooter className="border-t pt-4">
+            <Button variant="outline" size="sm" className="w-full" asChild>
+              <Link href={`/dashboard/my-appointments/${appointment.id}`}>
+                View Details
+              </Link>
+            </Button>
+          </CardFooter>
+        </Card>
+      ))}
+    </div>
+  );
+};
+
+export default AppointmentsList;
+
+```
+
+- src\services\patient\appointment.service.ts
+
+```ts 
+"use server"
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { serverFetch } from "@/lib/server-fetch";
+import { IAppointmentFormData } from "@/types/appointments.interface";
+
+export async function createAppointment(data: IAppointmentFormData) {
+    try {
+        const response = await serverFetch.post("/appointment", {
+            body: JSON.stringify(data),
+            headers: {
+                "Content-Type": "application/json",
+            },
+        });
+
+        const result = await response.json();
+        return result;
+    } catch (error: any) {
+        console.error("Error creating appointment:", error);
+        return {
+            success: false,
+            message:
+                process.env.NODE_ENV === "development"
+                    ? error.message
+                    : "Failed to book appointment",
+        };
+    }
+}
+
+export async function getMyAppointments(queryString?: string) {
+    try {
+        const response = await serverFetch.get(
+            `/appointment/my-appointment${queryString ? `?${queryString}` : "?sortBy=createdAt&sortOrder=desc"}`
+        );
+        const result = await response.json();
+        console.log({ result });
+        return result;
+    } catch (error: any) {
+        console.error("Error fetching appointments:", error);
+        return {
+            success: false,
+            data: [],
+            message:
+                process.env.NODE_ENV === "development"
+                    ? error.message
+                    : "Failed to fetch appointments",
+        };
+    }
+}
+
+export async function getAppointmentById(appointmentId: string) {
+    try {
+        const response = await serverFetch.get('/appointment/my-appointment');
+        const result = await response.json();
+
+        if (result.success && result.data) {
+            // Find the appointment by ID from the list
+            const appointment = result.data.find((apt: any) => apt.id === appointmentId);
+
+            if (appointment) {
+                return {
+                    success: true,
+                    data: appointment,
+                };
+            } else {
+                return {
+                    success: false,
+                    data: null,
+                    message: "Appointment not found",
+                };
+            }
+        }
+
+        return {
+            success: false,
+            data: null,
+            message: result.message || "Failed to fetch appointment",
+        };
+    } catch (error: any) {
+        console.error("Error fetching appointment:", error);
+        return {
+            success: false,
+            data: null,
+            message:
+                process.env.NODE_ENV === "development"
+                    ? error.message
+                    : "Failed to fetch appointment",
+        };
+    }
+}
+
+export async function changeAppointmentStatus(
+    appointmentId: string,
+    status: string
+) {
+    try {
+        const response = await serverFetch.patch(
+            `/appointment/status/${appointmentId}`,
+            {
+                body: JSON.stringify({ status }),
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            }
+        );
+
+        const result = await response.json();
+        return result;
+    } catch (error: any) {
+        console.error("Error changing appointment status:", error);
+        return {
+            success: false,
+            message:
+                process.env.NODE_ENV === "development"
+                    ? error.message
+                    : "Failed to change appointment status",
+        };
+    }
+}
+
+```
+
+## 73-6 Creating Components And Page For Appointment Detail Of Patient Dashboard
+- src\components\modules\Patient\PatientAppointment\AppointmentDetails.tsx
+
+```tsx
+/* eslint-disable @typescript-eslint/no-explicit-any */
+"use client";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { format } from "date-fns";
+import {
+  AlertCircle,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  MapPin,
+  Phone,
+  Star,
+  Stethoscope,
+  User,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+// import ReviewDialog from "./ReviewDialog";
+import {
+  AppointmentStatus,
+  IAppointment,
+} from "@/types/appointments.interface";
+import ReviewDialog from "./ReviewDialog";
+
+interface AppointmentDetailProps {
+  appointment: IAppointment;
+}
+
+const AppointmentDetails = ({ appointment }: AppointmentDetailProps) => {
+  const router = useRouter();
+  const [showReviewDialog, setShowReviewDialog] = useState(false);
+
+  const isCompleted = appointment.status === AppointmentStatus.COMPLETED;
+  const canReview = isCompleted && !appointment.review;
+
+  const getStatusBadge = (status: AppointmentStatus) => {
+    const statusConfig: Record<
+      AppointmentStatus,
+      { variant: any; label: string; className?: string }
+    > = {
+      [AppointmentStatus.SCHEDULED]: {
+        variant: "default",
+        label: "Scheduled",
+        className: "bg-blue-500 hover:bg-blue-600",
+      },
+      [AppointmentStatus.INPROGRESS]: {
+        variant: "secondary",
+        label: "In Progress",
+      },
+      [AppointmentStatus.COMPLETED]: {
+        variant: "default",
+        label: "Completed",
+        className: "bg-green-500 hover:bg-green-600",
+      },
+      [AppointmentStatus.CANCELED]: {
+        variant: "destructive",
+        label: "Canceled",
+      },
+    };
+
+    const config = statusConfig[status];
+    return (
+      <Badge variant={config.variant} className={config.className}>
+        {config.label}
+      </Badge>
+    );
+  };
+  return (
+    <div className="max-w-5xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Appointment Details
+          </h1>
+          <p className="text-muted-foreground mt-2">
+            Complete information about your appointment
+          </p>
+        </div>
+        <Button variant="outline" onClick={() => router.back()}>
+          Back
+        </Button>
+      </div>
+
+      {/* Review Notification - Only show if can review (completed but no review) */}
+      {canReview && (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-amber-900">
+                  Review This Appointment
+                </h3>
+                <p className="text-sm text-amber-700 mt-1">
+                  Your appointment has been completed. Share your experience by
+                  leaving a review for Dr. {appointment.doctor?.name}.
+                </p>
+                <Button
+                  onClick={() => setShowReviewDialog(true)}
+                  className="mt-3"
+                  size="sm"
+                >
+                  Write a Review
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Cannot Review Yet - Only show if not completed and no review */}
+      {!isCompleted && !appointment.review && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+              <div>
+                <h3 className="font-semibold text-blue-900">
+                  Review Not Available Yet
+                </h3>
+                <p className="text-sm text-blue-700 mt-1">
+                  You can review this appointment after it has been completed.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Doctor Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Doctor Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <p className="text-2xl font-semibold">
+                {appointment.doctor?.name || "N/A"}
+              </p>
+              <p className="text-muted-foreground">
+                {appointment.doctor?.designation || "Doctor"}
+              </p>
+            </div>
+
+            <Separator />
+
+            {appointment.doctor?.doctorSpecialties &&
+              appointment.doctor.doctorSpecialties.length > 0 && (
+                <>
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Stethoscope className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">Specialties</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {appointment.doctor.doctorSpecialties.map((ds, idx) => (
+                        <Badge key={idx} variant="secondary">
+                          {ds.specialties?.title || "N/A"}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <Separator />
+                </>
+              )}
+
+            <div className="space-y-2">
+              {appointment.doctor?.qualification && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Qualification:</span>
+                  <span className="font-medium">
+                    {appointment.doctor.qualification}
+                  </span>
+                </div>
+              )}
+
+              {appointment.doctor?.experience !== undefined && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Experience:</span>
+                  <span className="font-medium">
+                    {appointment.doctor.experience} years
+                  </span>
+                </div>
+              )}
+
+              {appointment.doctor?.currentWorkingPlace && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Working at:</span>
+                  <span className="font-medium">
+                    {appointment.doctor.currentWorkingPlace}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              {appointment.doctor?.contactNumber && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <span>{appointment.doctor.contactNumber}</span>
+                </div>
+              )}
+
+              {appointment.doctor?.address && (
+                <div className="flex items-start gap-2 text-sm">
+                  <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                  <span>{appointment.doctor.address}</span>
+                </div>
+              )}
+            </div>
+
+            {appointment.doctor?.appointmentFee !== undefined && (
+              <>
+                <Separator />
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-blue-900">
+                      Consultation Fee
+                    </span>
+                    <span className="text-xl font-bold text-blue-600">
+                      ${appointment.doctor.appointmentFee}
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Appointment Details */}
+        <div className="space-y-6 lg:col-span-1">
+          {/* Status */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Appointment Status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">
+                  Current Status
+                </span>
+                {getStatusBadge(appointment.status)}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Schedule */}
+          {appointment.schedule && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  Schedule
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="bg-linear-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 space-y-3">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Date</p>
+                    <p className="text-xl font-bold text-blue-900">
+                      {format(
+                        new Date(appointment.schedule.startDateTime),
+                        "EEEE"
+                      )}
+                    </p>
+                    <p className="text-blue-700">
+                      {format(
+                        new Date(appointment.schedule.startDateTime),
+                        "MMMM d, yyyy"
+                      )}
+                    </p>
+                  </div>
+
+                  <Separator className="bg-blue-200" />
+
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-5 w-5 text-blue-600" />
+                    <div>
+                      <p className="text-sm text-muted-foreground">Time</p>
+                      <p className="font-semibold text-blue-900">
+                        {format(
+                          new Date(appointment.schedule.startDateTime),
+                          "h:mm a"
+                        )}{" "}
+                        -{" "}
+                        {format(
+                          new Date(appointment.schedule.endDateTime),
+                          "h:mm a"
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Prescription */}
+          {appointment.prescription && (
+            <Card className="border-green-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-green-700">
+                  <CheckCircle2 className="h-5 w-5" />
+                  Prescription Available
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="bg-green-50 rounded-lg p-3 space-y-2">
+                  <div>
+                    <span className="text-sm font-medium text-green-900">
+                      Instructions:
+                    </span>
+                    <p className="text-sm text-green-700 mt-1">
+                      {appointment.prescription.instructions}
+                    </p>
+                  </div>
+
+                  {appointment.prescription.followUpDate && (
+                    <div>
+                      <span className="text-sm font-medium text-green-900">
+                        Follow-up Date:
+                      </span>
+                      <p className="text-sm text-green-700">
+                        {format(
+                          new Date(appointment.prescription.followUpDate),
+                          "MMMM d, yyyy"
+                        )}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+
+      {/* Review Section - Full Width Below */}
+      {appointment.review && (
+        <Card className="border-yellow-200">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-yellow-700">
+              <Star className="h-5 w-5 fill-yellow-600" />
+              Your Review
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="bg-yellow-50 rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Star
+                    key={star}
+                    className={`h-5 w-5 ${
+                      star <= appointment.review!.rating
+                        ? "fill-yellow-500 text-yellow-500"
+                        : "text-gray-300"
+                    }`}
+                  />
+                ))}
+                <span className="ml-2 text-sm font-medium text-yellow-900">
+                  {appointment.review.rating}/5
+                </span>
+              </div>
+
+              {appointment.review.comment && (
+                <div>
+                  <p className="text-sm text-yellow-900 font-medium mb-1">
+                    Comment:
+                  </p>
+                  <p className="text-sm text-yellow-800">
+                    {appointment.review.comment}
+                  </p>
+                </div>
+              )}
+
+              <p className="text-xs text-yellow-600 italic">
+                Reviews cannot be edited or deleted once submitted.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Review Dialog */}
+      {canReview && (
+        <ReviewDialog
+          isOpen={showReviewDialog}
+          onClose={() => setShowReviewDialog(false)}
+          appointmentId={appointment.id}
+          doctorName={appointment.doctor?.name || "the doctor"}
+        />
+      )}
+    </div>
+  );
+};
+
+export default AppointmentDetails;
+
+```
+## 73-7 Creating Components And Page For Appointment List Table For Doctor
+- src\components\modules\Doctor\DoctorAppointments\ChangeAppointmentStatusDialog.tsx
+
+```tsx
+"use client";
+
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { changeAppointmentStatus } from "@/services/patient/appointment.service";
+import {
+  AppointmentStatus,
+  IAppointment,
+} from "@/types/appointments.interface";
+import { AlertCircle, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+
+interface ChangeStatusDialogProps {
+  appointment: IAppointment;
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export default function ChangeAppointmentStatusDialog({
+  appointment,
+  isOpen,
+  onClose,
+}: ChangeStatusDialogProps) {
+  const [newStatus, setNewStatus] = useState<AppointmentStatus>(
+    appointment.status
+  );
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const statusOptions = [
+    { value: AppointmentStatus.SCHEDULED, label: "Scheduled" },
+    { value: AppointmentStatus.INPROGRESS, label: "In Progress" },
+    { value: AppointmentStatus.COMPLETED, label: "Completed" },
+    { value: AppointmentStatus.CANCELED, label: "Canceled" },
+  ];
+
+  const handleSubmit = async () => {
+    if (newStatus === appointment.status) {
+      toast.info("No changes made");
+      onClose();
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const result = await changeAppointmentStatus(appointment.id, newStatus);
+
+      if (result.success) {
+        toast.success("Appointment status updated successfully");
+
+        // Show prescription reminder if completed
+        if (
+          newStatus === AppointmentStatus.COMPLETED &&
+          !appointment.prescription
+        ) {
+          setTimeout(() => {
+            toast.info(
+              "Don't forget to provide a prescription for this patient",
+              {
+                duration: 5000,
+              }
+            );
+          }, 1000);
+        }
+
+        onClose();
+      } else {
+        toast.error(result.message || "Failed to update status");
+      }
+    } catch (error) {
+      toast.error("An error occurred while updating status");
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (!isSubmitting) {
+      onClose();
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Change Appointment Status</DialogTitle>
+          <DialogDescription>
+            Update the status for {appointment.patient?.name}&apos;s appointment
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          {/* Current Status */}
+          <div className="space-y-2">
+            <Label>Current Status</Label>
+            <div className="text-sm font-medium">
+              {
+                statusOptions.find((opt) => opt.value === appointment.status)
+                  ?.label
+              }
+            </div>
+          </div>
+
+          {/* New Status */}
+          <div className="space-y-2">
+            <Label htmlFor="status">New Status</Label>
+            <Select
+              value={newStatus}
+              onValueChange={(value) =>
+                setNewStatus(value as AppointmentStatus)
+              }
+              disabled={isSubmitting}
+            >
+              <SelectTrigger id="status">
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                {statusOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Warning for Completion */}
+          {newStatus === AppointmentStatus.COMPLETED &&
+            !appointment.prescription && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5" />
+                  <div className="text-sm text-amber-800">
+                    <strong>Reminder:</strong> After marking as completed,
+                    please provide a prescription for this patient.
+                  </div>
+                </div>
+              </div>
+            )}
+        </div>
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleClose}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Updating...
+              </>
+            ) : (
+              "Confirm Change"
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+```
+
+- src\components\modules\Doctor\DoctorAppointments\doctorAppointmentColumns.tsx
+
+```tsx 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { Column } from "@/components/shared/ManagementTable";
+import { Badge } from "@/components/ui/badge";
+import {
+  AppointmentStatus,
+  IAppointment,
+} from "@/types/appointments.interface";
+import { format } from "date-fns";
+
+const statusConfig: Record<
+  AppointmentStatus,
+  { variant: any; label: string; className?: string }
+> = {
+  [AppointmentStatus.SCHEDULED]: {
+    variant: "default",
+    label: "Scheduled",
+    className: "bg-blue-500 hover:bg-blue-600",
+  },
+  [AppointmentStatus.INPROGRESS]: {
+    variant: "secondary",
+    label: "In Progress",
+  },
+  [AppointmentStatus.COMPLETED]: {
+    variant: "default",
+    label: "Completed",
+    className: "bg-green-500 hover:bg-green-600",
+  },
+  [AppointmentStatus.CANCELED]: {
+    variant: "destructive",
+    label: "Canceled",
+  },
+};
+
+export const doctorAppointmentColumns: Column<IAppointment>[] = [
+  {
+    header: "Patient",
+    accessor: (appointment) => (
+      <div className="flex items-center gap-2">
+        <div>
+          <p className="font-medium">{appointment.patient?.name || "N/A"}</p>
+          <p className="text-xs text-muted-foreground">
+            {appointment.patient?.email || ""}
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
+    header: "Date & Time",
+    accessor: (appointment) => {
+      if (!appointment.schedule?.startDateTime) return "N/A";
+      return (
+        <div className="text-sm">
+          <p className="font-medium">
+            {format(
+              new Date(appointment.schedule.startDateTime),
+              "MMM d, yyyy"
+            )}
+          </p>
+          <p className="text-muted-foreground">
+            {format(new Date(appointment.schedule.startDateTime), "h:mm a")} -{" "}
+            {format(new Date(appointment.schedule.endDateTime), "h:mm a")}
+          </p>
+        </div>
+      );
+    },
+    sortKey: "schedule.startDateTime",
+  },
+  {
+    header: "Status",
+    accessor: (appointment) => {
+      const config = statusConfig[appointment.status];
+      return (
+        <Badge variant={config.variant} className={config.className}>
+          {config.label}
+        </Badge>
+      );
+    },
+  },
+  {
+    header: "Payment",
+    accessor: (appointment) => {
+      const isPaid = appointment.paymentStatus === "PAID";
+      return (
+        <Badge
+          variant={isPaid ? "default" : "secondary"}
+          className={isPaid ? "bg-green-500" : ""}
+        >
+          {isPaid ? "Paid" : "Unpaid"}
+        </Badge>
+      );
+    },
+  },
+  {
+    header: "Prescription",
+    accessor: (appointment) => {
+      return appointment.prescription ? (
+        <Badge variant="outline" className="bg-green-50 text-green-700">
+          Provided
+        </Badge>
+      ) : appointment.status === AppointmentStatus.COMPLETED ? (
+        <Badge variant="outline" className="bg-amber-50 text-amber-700">
+          Pending
+        </Badge>
+      ) : (
+        <span className="text-muted-foreground">-</span>
+      );
+    },
+  },
+];
+
+```
+
+- src\components\modules\Doctor\DoctorAppointments\DoctorAppointmentDetailDialog.tsx
+
+```tsx
+"use client";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { createPrescription } from "@/services/patient/prescription.service";
+import { IAppointment } from "@/types/appointments.interface";
+import { format } from "date-fns";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { toast } from "sonner";
+
+interface DoctorAppointmentDetailDialogProps {
+  appointment: IAppointment | null;
+  open: boolean;
+  onClose: () => void;
+}
+
+export default function DoctorAppointmentDetailDialog({
+  appointment,
+  open,
+  onClose,
+}: DoctorAppointmentDetailDialogProps) {
+  const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [instructions, setInstructions] = useState("");
+  const [followUpDate, setFollowUpDate] = useState("");
+
+  if (!appointment) return null;
+
+  const { patient, schedule, status, paymentStatus, prescription } =
+    appointment;
+
+  const isCompleted = status === "COMPLETED";
+  const hasPrescription = !!prescription;
+  const canWritePrescription = isCompleted && !hasPrescription;
+
+  const handleSubmitPrescription = async () => {
+    if (!instructions.trim()) {
+      toast.error("Please provide prescription instructions");
+      return;
+    }
+
+    if (instructions.trim().length < 20) {
+      toast.error(
+        "Instructions must be at least 20 characters long for clarity"
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const prescriptionData: {
+        appointmentId: string;
+        instructions: string;
+        followUpDate?: string;
+      } = {
+        appointmentId: appointment.id,
+        instructions: instructions.trim(),
+      };
+
+      if (followUpDate) {
+        // Convert to ISO-8601 DateTime format
+        prescriptionData.followUpDate = new Date(followUpDate).toISOString();
+      }
+
+      const result = await createPrescription(prescriptionData);
+
+      if (result.success) {
+        toast.success("Prescription created successfully");
+        setInstructions("");
+        setFollowUpDate("");
+        onClose();
+        router.refresh();
+      } else {
+        toast.error(result.message || "Failed to create prescription");
+      }
+    } catch (error) {
+      console.error("Error creating prescription:", error);
+      toast.error("An error occurred while creating prescription");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleClose = () => {
+    setInstructions("");
+    setFollowUpDate("");
+    onClose();
+    router.refresh();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="min-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Appointment Details</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-6">
+          {/* Patient Information */}
+          <div className="border rounded-lg p-4 bg-muted/50">
+            <h3 className="font-semibold text-lg mb-3">Patient Information</h3>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-muted-foreground">Name</p>
+                <p className="font-medium">{patient?.name}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Email</p>
+                <p className="font-medium">{patient?.email}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Contact Number</p>
+                <p className="font-medium">
+                  {patient?.contactNumber || "Not provided"}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Address</p>
+                <p className="font-medium">
+                  {patient?.address || "Not provided"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Appointment Details */}
+          <div className="border rounded-lg p-4">
+            <h3 className="font-semibold text-lg mb-3">Appointment Details</h3>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-muted-foreground">Schedule Date</p>
+                <p className="font-medium">
+                  {schedule?.startDateTime
+                    ? format(new Date(schedule.startDateTime), "PPP")
+                    : "N/A"}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Time</p>
+                <p className="font-medium">
+                  {schedule?.startDateTime && schedule?.endDateTime
+                    ? `${format(
+                        new Date(schedule.startDateTime),
+                        "p"
+                      )} - ${format(new Date(schedule.endDateTime), "p")}`
+                    : "N/A"}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Status</p>
+                <div>
+                  <Badge
+                    variant="outline"
+                    className={
+                      status === "COMPLETED"
+                        ? "border-green-500 text-green-700 bg-green-50"
+                        : status === "INPROGRESS"
+                        ? "border-blue-500 text-blue-700 bg-blue-50"
+                        : status === "SCHEDULED"
+                        ? "border-purple-500 text-purple-700 bg-purple-50"
+                        : "border-red-500 text-red-700 bg-red-50"
+                    }
+                  >
+                    {status}
+                  </Badge>
+                </div>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Payment</p>
+                <div>
+                  <Badge
+                    variant={
+                      paymentStatus === "PAID" ? "default" : "destructive"
+                    }
+                  >
+                    {paymentStatus}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Prescription Section */}
+          <div className="border rounded-lg p-4">
+            <h3 className="font-semibold text-lg mb-3">Prescription</h3>
+
+            {status === "CANCELED" && (
+              <div className="text-sm text-muted-foreground p-4 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-red-800">
+                  ⚠️ This appointment has been canceled. No prescription can be
+                  provided.
+                </p>
+              </div>
+            )}
+
+            {!isCompleted && status !== "CANCELED" && (
+              <div className="text-sm text-muted-foreground p-4 bg-muted/50 rounded-md">
+                <p>
+                  You can write a prescription once the appointment is marked as{" "}
+                  <span className="font-semibold text-green-700">
+                    COMPLETED
+                  </span>
+                  .
+                </p>
+              </div>
+            )}
+
+            {canWritePrescription && (
+              <div className="space-y-4">
+                <div className="bg-amber-50 border border-amber-200 rounded-md p-3 mb-4">
+                  <p className="text-sm text-amber-800">
+                    ⚠️ Once created, prescriptions cannot be edited or deleted.
+                    Please ensure all information is correct.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="instructions">
+                    Instructions <span className="text-destructive">*</span>
+                  </Label>
+                  <Textarea
+                    id="instructions"
+                    placeholder="Enter prescription instructions (minimum 20 characters)..."
+                    value={instructions}
+                    onChange={(e) => setInstructions(e.target.value)}
+                    rows={6}
+                    className="resize-none"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {instructions.length} / 20 characters minimum
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="followUpDate">
+                    Follow-up Date & Time (Optional)
+                  </Label>
+                  <Input
+                    id="followUpDate"
+                    type="datetime-local"
+                    value={followUpDate}
+                    onChange={(e) => setFollowUpDate(e.target.value)}
+                    min={new Date().toISOString().slice(0, 16)}
+                  />
+                </div>
+
+                <Button
+                  onClick={handleSubmitPrescription}
+                  disabled={isSubmitting}
+                  className="w-full"
+                >
+                  {isSubmitting
+                    ? "Creating Prescription..."
+                    : "Create Prescription"}
+                </Button>
+              </div>
+            )}
+
+            {hasPrescription && (
+              <div className="space-y-4">
+                <div className="bg-green-50 border border-green-200 rounded-md p-3 mb-4">
+                  <p className="text-sm text-green-800">
+                    ✓ Prescription has been provided for this appointment
+                  </p>
+                  <p className="text-xs text-green-700 mt-1">
+                    Note: Appointment status cannot be changed once prescription
+                    is provided
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">
+                      Instructions
+                    </p>
+                    <div className="bg-muted/50 p-3 rounded-md">
+                      <p className="text-sm whitespace-pre-wrap">
+                        {prescription.instructions}
+                      </p>
+                    </div>
+                  </div>
+
+                  {prescription.followUpDate && (
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-1">
+                        Follow-up Date
+                      </p>
+                      <p className="text-sm font-medium">
+                        {format(new Date(prescription.followUpDate), "PPP")}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="text-xs text-muted-foreground italic pt-2 border-t">
+                    Note: Prescriptions cannot be edited or deleted once created
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex justify-end pt-4 border-t">
+          <Button variant="outline" onClick={handleClose}>
+            Close
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+```
+
+- src\components\modules\Doctor\DoctorAppointments\DoctorAppointmentTable.tsx
+
+```tsx
+
+"use client";
+
+import ManagementTable from "@/components/shared/ManagementTable";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { toast } from "sonner";
+import { doctorAppointmentColumns } from "./doctorAppointmentColumns";
+import {
+  AppointmentStatus,
+  IAppointment,
+} from "@/types/appointments.interface";
+import ChangeAppointmentStatusDialog from "./ChangeAppointmentStatusDialog";
+import DoctorAppointmentDetailDialog from "./DoctorAppointmentDetailDialog";
+
+interface DoctorAppointmentsTableProps {
+  appointments: IAppointment[];
+}
+
+export default function DoctorAppointmentsTable({
+  appointments = [],
+}: DoctorAppointmentsTableProps) {
+  const router = useRouter();
+  const [viewingAppointment, setViewingAppointment] =
+    useState<IAppointment | null>(null);
+  const [changingStatusAppointment, setChangingStatusAppointment] =
+    useState<IAppointment | null>(null);
+
+  const handleView = (appointment: IAppointment) => {
+    setViewingAppointment(appointment);
+  };
+
+  const handleStatusChange = (appointment: IAppointment) => {
+    setChangingStatusAppointment(appointment);
+  };
+
+  // Custom wrapper to conditionally show edit action
+  const handleEditClick = (appointment: IAppointment) => {
+    // Cannot change status for:
+    // 1. Canceled appointments
+    // 2. Completed appointments with prescriptions
+    if (appointment.status === AppointmentStatus.CANCELED) {
+      toast.error("Cannot change status for canceled appointments", {
+        description: "Canceled appointments are final and cannot be modified.",
+      });
+      return;
+    }
+
+    if (
+      appointment.status === AppointmentStatus.COMPLETED &&
+      !!appointment.prescription
+    ) {
+      toast.error("Cannot change status once prescription is provided", {
+        description:
+          "Appointment status is locked after prescription is created to maintain medical record integrity.",
+      });
+      return;
+    }
+
+    handleStatusChange(appointment);
+  };
+
+  return (
+    <>
+      <ManagementTable
+        data={appointments}
+        columns={doctorAppointmentColumns}
+        onView={handleView}
+        onEdit={handleEditClick}
+        getRowKey={(appointment) => appointment.id}
+        emptyMessage="No appointments found"
+      />
+
+      {/* View Detail Dialog */}
+      {viewingAppointment && (
+        <DoctorAppointmentDetailDialog
+          appointment={viewingAppointment}
+          open={!!viewingAppointment}
+          onClose={() => {
+            setViewingAppointment(null);
+            router.refresh();
+          }}
+        />
+      )}
+
+      {/* Change Status Dialog */}
+      {changingStatusAppointment && (
+        <ChangeAppointmentStatusDialog
+          appointment={changingStatusAppointment}
+          isOpen={!!changingStatusAppointment}
+          onClose={() => {
+            setChangingStatusAppointment(null);
+            router.refresh();
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+```
+
+## 73-8 Creating Components And Page For Prescription List Table For Doctor
+- src\components\modules\Doctor\DoctorPrescription\doctorPrescriptionColumns.tsx
+
+```tsx 
+"use client";
+import { Column } from "@/components/shared/ManagementTable";
+import { Badge } from "@/components/ui/badge";
+import { IPrescription } from "@/types/prescription.interface";
+import { format } from "date-fns";
+
+export const doctorPrescriptionColumns: Column<IPrescription>[] = [
+  {
+    header: "Patient",
+    accessor: (prescription: IPrescription) => (
+      <div>
+        <p className="font-medium">{prescription.patient?.name || "N/A"}</p>
+        <p className="text-sm text-muted-foreground">
+          {prescription.patient?.email || "N/A"}
+        </p>
+      </div>
+    ),
+  },
+  {
+    header: "Appointment Date",
+    accessor: (prescription: IPrescription) =>
+      prescription.appointment?.schedule?.startDateTime
+        ? format(
+            new Date(prescription.appointment.schedule.startDateTime),
+            "PPP"
+          )
+        : "N/A",
+  },
+  {
+    header: "Follow-up Date",
+    accessor: (prescription: IPrescription) =>
+      prescription.followUpDate ? (
+        <Badge variant="outline" className="border-blue-500 text-blue-700">
+          {format(new Date(prescription.followUpDate), "PPP")}
+        </Badge>
+      ) : (
+        <span className="text-muted-foreground text-sm">-</span>
+      ),
+  },
+  {
+    header: "Created At",
+    accessor: (prescription) => format(new Date(prescription.createdAt), "PPP"),
+    sortKey: "createdAt",
+  },
+];
+
+```
+
+- src\components\modules\Doctor\DoctorPrescription\DoctorPrescriptionTable.tsx
+
+```tsx 
+"use client";
+
+import ManagementTable from "@/components/shared/ManagementTable";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { format } from "date-fns";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { doctorPrescriptionColumns } from "./doctorPrescriptionColumns";
+import { IPrescription } from "@/types/prescription.interface";
+
+interface DoctorPrescriptionsTableProps {
+  prescriptions: IPrescription[];
+}
+
+export default function DoctorPrescriptionsTable({
+  prescriptions = [],
+}: DoctorPrescriptionsTableProps) {
+  const router = useRouter();
+  const [viewingPrescription, setViewingPrescription] =
+    useState<IPrescription | null>(null);
+
+  const handleView = (prescription: IPrescription) => {
+    setViewingPrescription(prescription);
+  };
+
+  const handleClose = () => {
+    setViewingPrescription(null);
+    router.refresh();
+  };
+
+  return (
+    <>
+      <ManagementTable
+        data={prescriptions}
+        columns={doctorPrescriptionColumns}
+        onView={handleView}
+        getRowKey={(prescription) => prescription.id}
+        emptyMessage="No prescriptions found"
+      />
+
+      {/* View Detail Dialog */}
+      {viewingPrescription && (
+        <Dialog open={!!viewingPrescription} onOpenChange={handleClose}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Prescription Details</DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-6">
+              {/* Patient Information */}
+              <div className="border rounded-lg p-4 bg-muted/50">
+                <h3 className="font-semibold text-lg mb-3">
+                  Patient Information
+                </h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Name</p>
+                    <p className="font-medium">
+                      {viewingPrescription.patient?.name || "N/A"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Email</p>
+                    <p className="font-medium">
+                      {viewingPrescription.patient?.email || "N/A"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Contact Number</p>
+                    <p className="font-medium">
+                      {viewingPrescription.patient?.contactNumber ||
+                        "Not provided"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Address</p>
+                    <p className="font-medium">
+                      {viewingPrescription.patient?.address || "Not provided"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Appointment Information */}
+              <div className="border rounded-lg p-4">
+                <h3 className="font-semibold text-lg mb-3">
+                  Appointment Information
+                </h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Appointment Date</p>
+                    <p className="font-medium">
+                      {viewingPrescription.appointment?.schedule?.startDateTime
+                        ? format(
+                            new Date(
+                              viewingPrescription.appointment.schedule.startDateTime
+                            ),
+                            "PPP"
+                          )
+                        : "N/A"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Time</p>
+                    <p className="font-medium">
+                      {viewingPrescription.appointment?.schedule
+                        ?.startDateTime &&
+                      viewingPrescription.appointment?.schedule?.endDateTime
+                        ? `${format(
+                            new Date(
+                              viewingPrescription.appointment.schedule.startDateTime
+                            ),
+                            "p"
+                          )} - ${format(
+                            new Date(
+                              viewingPrescription.appointment.schedule.endDateTime
+                            ),
+                            "p"
+                          )}`
+                        : "N/A"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Status</p>
+                    <div>
+                      <Badge variant="default" className="bg-green-600">
+                        {viewingPrescription.appointment?.status || "N/A"}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Payment</p>
+                    <div>
+                      <Badge variant="default">
+                        {viewingPrescription.appointment?.paymentStatus ||
+                          "N/A"}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Prescription Details */}
+              <div className="border rounded-lg p-4">
+                <h3 className="font-semibold text-lg mb-3">
+                  Prescription Details
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Instructions
+                    </p>
+                    <div className="bg-muted/50 p-4 rounded-md">
+                      <p className="text-sm whitespace-pre-wrap">
+                        {viewingPrescription.instructions}
+                      </p>
+                    </div>
+                  </div>
+
+                  {viewingPrescription.followUpDate && (
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-2">
+                        Follow-up Date
+                      </p>
+                      <Badge
+                        variant="outline"
+                        className="border-blue-500 text-blue-700 bg-blue-50"
+                      >
+                        {format(
+                          new Date(viewingPrescription.followUpDate),
+                          "PPP"
+                        )}
+                      </Badge>
+                    </div>
+                  )}
+
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Prescribed On
+                    </p>
+                    <p className="text-sm font-medium">
+                      {format(new Date(viewingPrescription.createdAt), "PPP p")}
+                    </p>
+                  </div>
+
+                  <div className="text-xs text-muted-foreground italic pt-2 border-t">
+                    Note: Prescriptions are read-only and cannot be edited or
+                    deleted
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-4 border-t">
+              <Button variant="outline" onClick={handleClose}>
+                Close
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
+```
+
+
+## 73-9 Creating Components For Prescription List And Review For Patient
+
+
+- src\components\modules\Patient\PatientPrescription\PatientPrescriptionList.tsx
+
+```tsx 
+"use client";
+
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { IPrescription } from "@/types/prescription.interface";
+import { format } from "date-fns";
+import { Calendar, Clock, FileText, User } from "lucide-react";
+
+interface PatientPrescriptionsListProps {
+  prescriptions: IPrescription[];
+}
+
+export default function PatientPrescriptionsList({
+  prescriptions = [],
+}: PatientPrescriptionsListProps) {
+  // Sort prescriptions by creation date (latest first)
+  const sortedPrescriptions = [...prescriptions].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+
+  if (prescriptions.length === 0) {
+    return (
+      <Card className="p-8 text-center">
+        <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+        <h3 className="text-lg font-semibold mb-2">No Prescriptions Yet</h3>
+        <p className="text-muted-foreground">
+          Your prescriptions will appear here after your appointments are
+          completed.
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {sortedPrescriptions.map((prescription) => (
+        <Card
+          key={prescription.id}
+          className="p-6 hover:shadow-lg transition-shadow"
+        >
+          {/* Doctor Information */}
+          <div className="flex items-start gap-3 mb-4 pb-4 border-b">
+            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <User className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-lg truncate">
+                {prescription.doctor?.name || "N/A"}
+              </h3>
+              <p className="text-sm text-muted-foreground truncate">
+                {prescription.doctor?.email || "N/A"}
+              </p>
+              {prescription.doctor?.designation && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {prescription.doctor.designation}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Appointment Date */}
+          {prescription.appointment?.schedule?.startDateTime && (
+            <div className="flex items-center gap-2 mb-3 text-sm">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span className="text-muted-foreground">Appointment:</span>
+              <span className="font-medium">
+                {format(
+                  new Date(prescription.appointment.schedule.startDateTime),
+                  "PPP"
+                )}
+              </span>
+            </div>
+          )}
+
+          {/* Instructions Preview */}
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <FileText className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Instructions</span>
+            </div>
+            <div className="bg-muted/50 p-3 rounded-md">
+              <p className="text-sm text-muted-foreground line-clamp-3">
+                {prescription.instructions}
+              </p>
+            </div>
+          </div>
+
+          {/* Follow-up Date */}
+          {prescription.followUpDate && (
+            <div className="mb-4">
+              <Badge
+                variant="outline"
+                className="border-blue-500 text-blue-700 bg-blue-50"
+              >
+                <Calendar className="h-3 w-3 mr-1" />
+                Follow-up: {format(new Date(prescription.followUpDate), "PPP")}
+              </Badge>
+            </div>
+          )}
+
+          {/* Prescribed Date */}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground pt-3 border-t">
+            <Clock className="h-3 w-3" />
+            <span>
+              Prescribed on {format(new Date(prescription.createdAt), "PPP")}
+            </span>
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+```
+
+- src\components\modules\Patient\PatientAppointment\ReviewDialog.tsx
+
+```tsx 
+"use client";
+
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { createReview } from "@/services/patient/reviews.services";
+import { Star } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { toast } from "sonner";
+
+interface ReviewDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  appointmentId: string;
+  doctorName: string;
+}
+
+export default function ReviewDialog({
+  isOpen,
+  onClose,
+  appointmentId,
+  doctorName,
+}: ReviewDialogProps) {
+  const router = useRouter();
+  const [rating, setRating] = useState(0);
+  const [hoveredRating, setHoveredRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (rating === 0) {
+      toast.error("Please select a rating");
+      return;
+    }
+
+    if (comment.trim().length < 10) {
+      toast.error("Comment must be at least 10 characters");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const result = await createReview({
+        appointmentId,
+        rating,
+        comment: comment.trim(),
+      });
+
+      if (result.success) {
+        toast.success("Review submitted successfully!");
+        onClose();
+        router.refresh();
+      } else {
+        toast.error(result.message || "Failed to submit review");
+      }
+    } catch (error) {
+      toast.error("An error occurred while submitting review");
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (!isSubmitting) {
+      setRating(0);
+      setHoveredRating(0);
+      setComment("");
+      onClose();
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+      <DialogContent className="max-w-md">
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogTitle>Write a Review</DialogTitle>
+            <DialogDescription>
+              Share your experience with Dr. {doctorName}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            {/* Rating */}
+            <div className="space-y-2">
+              <Label htmlFor="rating">Rating *</Label>
+              <div className="flex items-center gap-2">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setRating(star)}
+                    onMouseEnter={() => setHoveredRating(star)}
+                    onMouseLeave={() => setHoveredRating(0)}
+                    className="focus:outline-none transition-transform hover:scale-110"
+                  >
+                    <Star
+                      className={`h-8 w-8 ${
+                        star <= (hoveredRating || rating)
+                          ? "fill-yellow-500 text-yellow-500"
+                          : "text-gray-300"
+                      }`}
+                    />
+                  </button>
+                ))}
+                {rating > 0 && (
+                  <span className="ml-2 text-sm font-medium">
+                    {rating}/5 -{" "}
+                    {rating === 1
+                      ? "Poor"
+                      : rating === 2
+                      ? "Fair"
+                      : rating === 3
+                      ? "Good"
+                      : rating === 4
+                      ? "Very Good"
+                      : "Excellent"}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Comment */}
+            <div className="space-y-2">
+              <Label htmlFor="comment">Comment * (minimum 10 characters)</Label>
+              <Textarea
+                id="comment"
+                placeholder="Share your experience with this doctor..."
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                rows={5}
+                disabled={isSubmitting}
+                className="resize-none"
+              />
+              <p className="text-xs text-muted-foreground">
+                {comment.length} characters
+              </p>
+            </div>
+
+            {/* Warning */}
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <p className="text-sm text-amber-800">
+                <strong>Note:</strong> Reviews cannot be edited or deleted once
+                submitted. Please ensure your feedback is accurate.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleClose}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Submitting..." : "Submit Review"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+```
